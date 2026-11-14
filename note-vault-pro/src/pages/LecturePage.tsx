@@ -39,30 +39,30 @@ export default function LecturePage() {
       <div>
         <Link to={subject ? `/subjects/${subject.id}` : "/subjects"} className="mb-2 inline-flex items-center gap-1 text-sm font-bold text-muted hover:text-fg"><ArrowRight size={14} className="ltr:rotate-180" />{subject?.name ?? t("المواد", "Subjects")}</Link>
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div><h1 className="text-2xl font-black sm:text-3xl" dir="auto">{lecture.title}</h1>
+          <div className="min-w-0 flex-1"><h1 className="break-words text-xl font-black sm:text-3xl" dir="auto">{lecture.title}</h1>
             <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted"><span>{week}</span><span>·</span><span>{fmtDate(lecture.date, { dateStyle: "full" })}</span><Badge>{statuses[lecture.reviewStatus]}</Badge></div></div>
           <Button onClick={() => setEdit(true)}><Pencil size={15} />{t("تعديل", "Edit")}</Button>
         </div>
-        {lecture.description && <p className="mt-2 text-sm text-muted" dir="auto">{lecture.description}</p>}
+        {lecture.description && <p className="nv-selectable mt-2 break-words text-sm text-muted" dir="auto">{lecture.description}</p>}
         {lecture.keywords.length > 0 && <div className="mt-2 flex flex-wrap gap-1.5">{lecture.keywords.map((k) => <Badge key={k} color={subject?.color}>#{k}</Badge>)}</div>}
       </div>
 
-      <section className="card-surface grid gap-4 p-5 sm:grid-cols-2">
+      <section className="card-surface grid gap-4 p-4 sm:grid-cols-2 sm:p-5">
         <div>
           <div className="mb-2 text-sm font-bold">{t("حالة المراجعة", "Review status")}</div>
           <div className="flex flex-wrap gap-2">{(Object.keys(statuses) as ReviewStatus[]).map((s) => <Chip key={s} active={lecture.reviewStatus === s} onClick={() => void setReviewStatus(id, s)}>{statuses[s]}</Chip>)}</div>
         </div>
         <div>
           <div className="mb-2 flex justify-between text-sm font-bold"><label htmlFor="prog">{t("نسبة الإنجاز", "Progress")}</label><span>{lecture.progress}%</span></div>
-          <input id="prog" type="range" min={0} max={100} step={5} value={lecture.progress} onChange={(e) => void updateLecture(id, { progress: Number(e.target.value) })} className="w-full accent-[var(--accent)]" />
+          <input id="prog" type="range" min={0} max={100} step={5} value={lecture.progress} onChange={(e) => void updateLecture(id, { progress: Number(e.target.value) })} className="h-9 w-full accent-[var(--accent)]" />
           <ProgressBar value={lecture.progress} />
         </div>
       </section>
 
       <section>
-        <div className="mb-3 flex items-center justify-between"><h2 className="text-lg font-extrabold">{t("ملاحظات المحاضرة", "Lecture notes")}</h2><Button variant="primary" onClick={() => setNewNote(true)}><FilePlus2 size={15} />{t("ملاحظة", "Note")}</Button></div>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h2 className="text-lg font-extrabold">{t("ملاحظات المحاضرة", "Lecture notes")}</h2><Button variant="primary" onClick={() => setNewNote(true)}><FilePlus2 size={15} />{t("ملاحظة", "Note")}</Button></div>
         {notes.length === 0 ? <EmptyState icon={<FilePlus2 />} title={t("لا توجد ملاحظات لهذه المحاضرة", "No notes for this lecture")} action={<Button variant="primary" onClick={() => setNewNote(true)}>{t("ابدأ بقالب جاهز", "Start from a template")}</Button>} /> : (
-          <div className="grid gap-2 sm:grid-cols-2">{notes.map((n) => <Link key={n.id} to={`/notes/${n.id}`} className="card-surface p-4 hover:border-accent"><div className="truncate font-extrabold" dir="auto">{n.title || t("بدون عنوان", "Untitled")}</div><p className="mt-1 line-clamp-2 text-sm text-muted" dir="auto">{n.text.slice(0, 140)}</p></Link>)}</div>
+          <div className="grid gap-2 md:grid-cols-2">{notes.map((n) => <Link key={n.id} to={`/notes/${n.id}`} className="card-surface min-w-0 p-4 hover:border-accent"><div className="truncate font-extrabold" dir="auto">{n.title || t("بدون عنوان", "Untitled")}</div><p className="mt-1 line-clamp-2 text-sm text-muted" dir="auto">{n.text.slice(0, 140)}</p></Link>)}</div>
         )}
       </section>
 
@@ -73,14 +73,14 @@ export default function LecturePage() {
       <section>
         <h2 className="mb-3 text-lg font-extrabold">{t("الملفات والمرفقات", "Files & attachments")}</h2>
         <UploadZone link={{ lectureId: id }} compact />
-        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">{others.map((f) => <AttachmentCard key={f.id} att={f} onEdit={setEditFile} />)}</div>
+        <div className="mt-3 grid grid-cols-1 gap-3 min-[380px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">{others.map((f) => <AttachmentCard key={f.id} att={f} onEdit={setEditFile} />)}</div>
         {audio.length > 0 && <div className="mt-4 space-y-2"><h3 className="text-sm font-bold">{t("التسجيلات الصوتية", "Audio recordings")}</h3>{audio.map((f) => <AttachmentCard key={f.id} att={f} onEdit={setEditFile} list />)}</div>}
       </section>
 
       <section>
-        <div className="mb-3 flex items-center justify-between"><h2 className="text-lg font-extrabold">{t("بطاقات مرتبطة", "Linked cards")}</h2>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h2 className="text-lg font-extrabold">{t("بطاقات مرتبطة", "Linked cards")}</h2>
           <Button onClick={() => openCard({ subjectId: lecture.subjectId, source: { lectureId: id } })}><Plus size={15} />{t("بطاقة", "Card")}</Button></div>
-        {cards.length === 0 ? <p className="text-sm text-muted">{t("لا توجد بطاقات مرتبطة", "No linked cards")}</p> : <div className="grid gap-2 sm:grid-cols-2">{cards.map((c) => <div key={c.id} className="card-surface p-3 text-sm font-bold" dir="auto">{c.front.slice(0, 100)}</div>)}</div>}
+        {cards.length === 0 ? <p className="text-sm text-muted">{t("لا توجد بطاقات مرتبطة", "No linked cards")}</p> : <div className="grid gap-2 md:grid-cols-2">{cards.map((c) => <div key={c.id} className="nv-selectable card-surface break-words p-3 text-sm font-bold" dir="auto">{c.front.slice(0, 100)}</div>)}</div>}
       </section>
 
       <LectureForm open={edit} onClose={() => setEdit(false)} subjectId={lecture.subjectId} lecture={lecture} />

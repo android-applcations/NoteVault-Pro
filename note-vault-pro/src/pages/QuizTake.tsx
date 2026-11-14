@@ -38,11 +38,11 @@ function QInput({ q, value, onChange, locked, rightOptions }: { q: QuizQuestion;
   if (q.type === "cloze") {
     const arr = (Array.isArray(value) ? value : []) as string[];
     let bi = -1;
-    return <p className="text-lg leading-[3rem]" dir="auto">{parseCloze(q.prompt).map((s, i) => { if (s.blank === undefined) return <span key={i}>{s.text}</span>; const k = ++bi; return <input key={i} disabled={locked} aria-label={`${t("فراغ", "Blank")} ${k + 1}`} value={arr[k] ?? ""} onChange={(e) => { const n = arr.slice(); n[k] = e.target.value; onChange(n); }} className="mx-1 inline-block w-36 rounded-lg border-b-2 border-accent bg-surface2 px-2 py-1 text-center text-base" />; })}</p>;
+    return <p className="nv-selectable text-lg leading-[3rem]" dir="auto">{parseCloze(q.prompt).map((s, i) => { if (s.blank === undefined) return <span key={i}>{s.text}</span>; const k = ++bi; return <input key={i} disabled={locked} aria-label={`${t("فراغ", "Blank")} ${k + 1}`} value={arr[k] ?? ""} onChange={(e) => { const n = arr.slice(); n[k] = e.target.value; onChange(n); }} className="mx-1 inline-block w-28 max-w-full rounded-lg border-b-2 border-accent bg-surface2 px-2 py-1 text-center text-base sm:w-36" />; })}</p>;
   }
   if (q.type === "match") {
     const arr = (Array.isArray(value) ? value : []) as (string | null)[];
-    return <div className="space-y-2">{q.pairs.map((p, i) => <div key={i} className="grid grid-cols-2 items-center gap-3"><div className="rounded-xl bg-surface2 p-3 text-sm font-bold" dir="auto">{p[0]}</div>
+    return <div className="space-y-2">{q.pairs.map((p, i) => <div key={i} className="grid grid-cols-1 items-center gap-2 sm:grid-cols-2 sm:gap-3"><div className="nv-selectable rounded-xl bg-surface2 p-3 text-sm font-bold" dir="auto">{p[0]}</div>
       <select disabled={locked} aria-label={p[0]} value={arr[i] ?? ""} onChange={(e) => { const n = arr.slice(); while (n.length < q.pairs.length) n.push(null); n[i] = e.target.value || null; onChange(n as string[]); }} className="h-11 rounded-xl border border-line bg-surface px-2 text-sm"><option value="">—</option>{rightOptions.map((o) => <option key={o} value={o}>{o}</option>)}</select></div>)}</div>;
   }
   const arr = (Array.isArray(value) ? value : q.options) as string[];
@@ -141,7 +141,7 @@ export default function QuizTake() {
       <div className="card-surface space-y-4 p-5 sm:p-7">
         <div className="flex items-center gap-2"><Badge>{labels[q.type]}</Badge><span className="text-xs text-muted">{q.points} {t("درجة", "pt")}</span></div>
         {q.imageId && <QImage id={q.imageId} />}
-        {q.type !== "cloze" && <h2 className="text-xl font-extrabold leading-8" dir="auto">{q.prompt}</h2>}
+        {q.type !== "cloze" && <h2 className="nv-selectable text-xl font-extrabold leading-8" dir="auto">{q.prompt}</h2>}
         <QInput q={q} value={answers[q.id]} onChange={(v) => setAnswers((a) => ({ ...a, [q.id]: v }))} locked={isChecked} rightOptions={rightOpts[q.id] ?? []} />
         {quiz.mode === "practice" && (isChecked ? (
           <div className={cn("rounded-2xl p-3 text-sm", res!.correct ? "bg-success/15" : "bg-danger/15")}><b>{res!.correct ? t("إجابة صحيحة ✓", "Correct ✓") : t("غير صحيحة ✗", "Incorrect ✗")}</b> — {t("الصحيح", "Answer")}: <span dir="auto">{correctText(q, t)}</span>{q.explanation && <p className="mt-1 text-muted" dir="auto">💡 {q.explanation}</p>}</div>

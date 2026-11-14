@@ -43,10 +43,10 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#2b2a6f] via-[#3b3a97] to-[#0b8579] p-6 text-white shadow-xl sm:p-8">
+      <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#2b2a6f] via-[#3b3a97] to-[#0b8579] p-4 text-white shadow-xl sm:p-8">
         <div className="pointer-events-none absolute -top-16 -end-10 h-56 w-56 rounded-full bg-white/10 blur-2xl" />
         <p className="text-sm font-semibold text-white/80">{greet} 👋</p>
-        <h1 className="mt-1 text-2xl font-black sm:text-4xl">{t("كل محاضراتك، ملاحظاتك، ملفاتك، وأفكارك في مكان واحد.", "All your lectures, notes, files and ideas in one place.")}</h1>
+        <h1 className="mt-1 text-xl font-black leading-snug sm:text-4xl">{t("كل محاضراتك، ملاحظاتك، ملفاتك، وأفكارك في مكان واحد.", "All your lectures, notes, files and ideas in one place.")}</h1>
         <p className="mt-2 text-sm text-white/80">
           {d.due > 0 ? t(`لديك ${fmtNum(d.due)} بطاقة مستحقة للمراجعة اليوم.`, `You have ${fmtNum(d.due)} cards due for review today.`) : t("لا توجد بطاقات مستحقة الآن — أحسنت!", "No cards due right now — well done!")}
         </p>
@@ -58,7 +58,7 @@ export default function Dashboard() {
       </motion.section>
 
       {empty && (
-        <EmptyState icon={<Sparkles />} title={t("ابدأ رحلتك الدراسية", "Start your study journey")} hint={t("أنشئ مادتك الأولى، ثم أضف محاضرة وملاحظة. كل بياناتك تبقى على جهازك.", "Create your first subject, then add a lecture and a note. All data stays on your device.")}
+        <EmptyState icon={<Sparkles />} title={t("ابدأ رحلتك الدراسية", "Start your study journey")} hint={t("أنشئ مادتك الأولى، ثم أضف محاضرة وملاحظة.", "Create your first subject, then add a lecture and a note.")}
           action={<Link to="/subjects"><Button variant="primary"><Plus size={16} />{t("إنشاء مادة", "Create a subject")}</Button></Link>} />
       )}
 
@@ -107,8 +107,8 @@ export default function Dashboard() {
         </div>
       </section>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section className="card-surface p-5">
+      <div className="grid gap-5 md:grid-cols-2">
+        <section className="card-surface p-4 sm:p-5">
           <h2 className="mb-3 flex items-center gap-2 text-lg font-extrabold"><NotebookText size={18} className="text-accent" />{t("آخر الملاحظات", "Recent notes")}</h2>
           <ul className="space-y-1">
             {d.recentNotes.map((n) => (
@@ -120,9 +120,9 @@ export default function Dashboard() {
             {d.recentNotes.length === 0 && <li className="text-sm text-muted">{t("لا توجد ملاحظات.", "No notes yet.")}</li>}
           </ul>
         </section>
-        <section className="card-surface p-5">
+        <section className="card-surface p-4 sm:p-5">
           <h2 className="mb-3 flex items-center gap-2 text-lg font-extrabold"><FileText size={18} className="text-accent" />{t("الملفات الحديثة", "Recent files")}</h2>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3 min-[480px]:grid-cols-3">
             {d.recentFiles.map((f) => (
               <Link key={f.id} to={`/files/${f.id}`} className="group">
                 <AttachmentThumb att={f} className="aspect-[3/4] rounded-xl border border-line" />

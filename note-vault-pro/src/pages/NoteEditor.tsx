@@ -192,7 +192,7 @@ function NoteView({ note }: { note: Note }) {
         </div>
       </div>
 
-      <input value={title} onChange={(e) => onTitle(e.target.value)} dir="auto" aria-label={t("عنوان الملاحظة", "Note title")} placeholder={t("عنوان الملاحظة", "Note title")} className="mb-1 w-full bg-transparent text-3xl font-black tracking-tight placeholder:text-muted/50 focus:outline-none sm:text-4xl" />
+      <input value={title} onChange={(e) => onTitle(e.target.value)} dir="auto" aria-label={t("عنوان الملاحظة", "Note title")} placeholder={t("عنوان الملاحظة", "Note title")} className="mb-1 w-full bg-transparent text-2xl font-black tracking-tight placeholder:text-muted/50 focus:outline-none sm:text-4xl" />
       <p className="mb-3 text-xs text-muted">{fmtDate(live.updatedAt, { dateStyle: "medium", timeStyle: "short" })} · {live.wordCount} {t("كلمة", "words")}</p>
 
       <AnimatePresence initial={false}>
@@ -200,14 +200,14 @@ function NoteView({ note }: { note: Note }) {
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
             <div className="card-surface mb-4 p-4">
               {panel === "info" ? (
-                <div className="grid gap-3 sm:grid-cols-3">
+                <div className="grid gap-3 md:grid-cols-3">
                   <Field label={t("المادة", "Subject")}>{(id) => <Select id={id} value={live.subjectId ?? ""} onChange={(e) => void updateNoteMeta(note.id, { subjectId: e.target.value || undefined, lectureId: undefined })}><option value="">—</option>{subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</Select>}</Field>
                   <Field label={t("المحاضرة", "Lecture")}>{(id) => <Select id={id} value={live.lectureId ?? ""} disabled={!live.subjectId} onChange={(e) => void updateNoteMeta(note.id, e.target.value ? { lectureId: e.target.value } : { lectureId: undefined })}><option value="">—</option>{lectures.map((l) => <option key={l.id} value={l.id}>{l.title}</option>)}</Select>}</Field>
                   <Field label={t("الوسوم (مفصولة بفاصلة)", "Tags (comma separated)")}>{(id) => <Input id={id} value={tags} dir="auto" onChange={(e) => setTags(e.target.value)} onBlur={() => void setNoteTags(note.id, tags.split(/[,،]+/))} />}</Field>
                 </div>
               ) : (
                 <div className="space-y-3"><UploadZone link={{ noteId: note.id }} compact />
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{files.map((f) => <AttachmentCard key={f.id} att={f} onEdit={setEditFile} />)}</div></div>
+                  <div className="grid grid-cols-1 gap-3 min-[380px]:grid-cols-2 md:grid-cols-4">{files.map((f) => <AttachmentCard key={f.id} att={f} onEdit={setEditFile} />)}</div></div>
               )}
             </div>
           </motion.div>
@@ -221,11 +221,13 @@ function NoteView({ note }: { note: Note }) {
         {versions.length === 0 ? <EmptyState icon={<History />} title={t("لا توجد نسخ محفوظة بعد", "No saved versions yet")} hint={t("تُنشأ النسخ تلقائياً عند التعديل كل بضع دقائق.", "Versions are created automatically every few minutes while you edit.")} /> : (
           <ul className="space-y-2">
             {versions.map((v, i) => (
-              <li key={v.id} className="flex items-center gap-3 rounded-2xl border border-line p-3">
-                <div className="min-w-0 flex-1"><div className="flex items-center gap-2 text-sm font-bold">{fmtDate(v.createdAt, { dateStyle: "medium", timeStyle: "short" })}{i === 0 && <Badge>{t("الأحدث", "Latest")}</Badge>}{v.label && <Badge>{v.label === "manual" ? t("يدوية", "Manual") : v.label === "restored" ? t("مستعادة", "Restored") : t("قبل الاستعادة", "Before restore")}</Badge>}</div>
+              <li key={v.id} className="flex flex-wrap items-center gap-2 rounded-2xl border border-line p-3 sm:flex-nowrap sm:gap-3">
+                <div className="min-w-0 flex-1 basis-44"><div className="flex flex-wrap items-center gap-2 text-sm font-bold">{fmtDate(v.createdAt, { dateStyle: "medium", timeStyle: "short" })}{i === 0 && <Badge>{t("الأحدث", "Latest")}</Badge>}{v.label && <Badge>{v.label === "manual" ? t("يدوية", "Manual") : v.label === "restored" ? t("مستعادة", "Restored") : t("قبل الاستعادة", "Before restore")}</Badge>}</div>
                   <p className="truncate text-xs text-muted" dir="auto">{v.text.slice(0, 100) || "—"}</p></div>
-                <Button onClick={() => void doRestore(v)}>{t("استعادة", "Restore")}</Button>
-                <IconButton label={t("حذف النسخة", "Delete version")} onClick={async () => { await deleteVersion(v.id); setVersions(await getVersions(note.id)); }}><Trash2 size={16} className="text-danger" /></IconButton>
+                <div className="ms-auto flex items-center gap-1.5">
+                  <Button onClick={() => void doRestore(v)}>{t("استعادة", "Restore")}</Button>
+                  <IconButton label={t("حذف النسخة", "Delete version")} onClick={async () => { await deleteVersion(v.id); setVersions(await getVersions(note.id)); }}><Trash2 size={16} className="text-danger" /></IconButton>
+                </div>
               </li>
             ))}
           </ul>

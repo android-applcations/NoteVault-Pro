@@ -28,7 +28,7 @@ export function applyPrefs(p: Prefs) {
   d.classList.toggle("dark", dark);
   d.classList.toggle("reduce-motion", p.reduceMotion);
   d.style.fontSize = SIZES[p.textSize];
-  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", dark ? "#0d0e1d" : "#2b2a6f");
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", dark ? "#0d0e1d" : "#f6f4ef");
 }
 
 interface Ctx {

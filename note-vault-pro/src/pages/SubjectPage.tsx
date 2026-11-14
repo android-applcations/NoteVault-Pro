@@ -98,7 +98,7 @@ export default function SubjectPage() {
           <div className="flex flex-wrap items-center gap-2"><h1 className="text-2xl font-black" dir="auto">{subject.name}</h1>{subject.code && <Badge color={subject.color}>{subject.code}</Badge>}{subject.archived && <Badge>{t("مؤرشفة", "Archived")}</Badge>}</div>
           {subject.description && <p className="mt-1 text-sm text-muted" dir="auto">{subject.description}</p>}
           <p className="mt-1 text-xs text-muted">{[subject.teacher, subject.credits ? `${subject.credits} ${t("ساعات", "credits")}` : ""].filter(Boolean).join(" · ")}</p>
-          <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-6">
+          <div className="mt-4 grid grid-cols-2 gap-2 min-[380px]:grid-cols-3 md:grid-cols-6">
             {[[t("محاضرات", "Lectures"), stats?.lectures], [t("ملاحظات", "Notes"), stats?.notes], [t("ملفات", "Files"), stats?.files], [t("بطاقات", "Cards"), stats?.cards], [t("الإكمال", "Completion"), `${stats?.completion ?? 0}%`], [t("آخر نشاط", "Last activity"), stats?.lastActivity ? relTime(stats.lastActivity, lang) : "—"]].map(([l, v]) => (
               <div key={l as string} className="rounded-xl bg-surface2 p-2.5 text-center"><div className="truncate text-lg font-black">{typeof v === "number" ? fmtNum(v) : v ?? "…"}</div><div className="text-xs text-muted">{l}</div></div>
             ))}
@@ -115,7 +115,7 @@ export default function SubjectPage() {
       {tab === "lectures" && (
         <div>
           <div className="mb-4 flex flex-wrap items-center gap-2">
-            <div className="flex rounded-xl bg-surface2 p-1" role="group" aria-label={t("طريقة العرض", "View mode")}>
+            <div className="flex flex-wrap rounded-xl bg-surface2 p-1" role="group" aria-label={t("طريقة العرض", "View mode")}>
               {([["week", Rows3, t("أسبوعي", "Weekly")], ["list", List, t("قائمة", "List")], ["cards", LayoutGrid, t("بطاقات", "Cards")], ["timeline", GitCommitHorizontal, t("زمني", "Timeline")]] as const).map(([v, Icon, label]) => (
                 <button key={v} onClick={() => setView(v)} aria-pressed={view === v} className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold ${view === v ? "bg-surface shadow" : "text-muted"}`}><Icon size={14} />{label}</button>
               ))}
@@ -140,7 +140,7 @@ export default function SubjectPage() {
                       <button className="rounded-lg p-1 text-muted hover:bg-surface2" aria-label={t("إعادة تسمية الأسبوع", "Rename week")} onClick={() => setWeekEdit({ n, label: subject.weeks.find((w) => w.n === n)?.label ?? "" })}><Pencil size={13} /></button>
                       <Button variant="ghost" className="ms-auto !min-h-8 !py-1 text-xs" onClick={() => setLecForm({ open: true, week: n })}><Plus size={13} />{t("محاضرة", "Lecture")}</Button>
                     </div>
-                    <div className="grid gap-2 lg:grid-cols-2">{inWeek.map((l) => item(l, "week"))}{inWeek.length === 0 && <p className="rounded-xl border border-dashed border-line p-3 text-sm text-muted">{t("أسبوع فارغ", "Empty week")}</p>}</div>
+                    <div className="grid gap-2 md:grid-cols-2">{inWeek.map((l) => item(l, "week"))}{inWeek.length === 0 && <p className="rounded-xl border border-dashed border-line p-3 text-sm text-muted">{t("أسبوع فارغ", "Empty week")}</p>}</div>
                   </section>
                 );
               })}
@@ -161,7 +161,7 @@ export default function SubjectPage() {
           )}
           {files.length > 0 && (
             <div className="mt-8"><h2 className="mb-2 text-base font-extrabold">{t("الملفات الحديثة", "Recent files")}</h2>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{[...files].sort((a, b) => b.createdAt - a.createdAt).slice(0, 4).map((f) => <AttachmentCard key={f.id} att={f} onEdit={setEditFile} />)}</div></div>
+              <div className="grid grid-cols-1 gap-3 min-[380px]:grid-cols-2 md:grid-cols-4">{[...files].sort((a, b) => b.createdAt - a.createdAt).slice(0, 4).map((f) => <AttachmentCard key={f.id} att={f} onEdit={setEditFile} />)}</div></div>
           )}
         </div>
       )}
@@ -170,21 +170,21 @@ export default function SubjectPage() {
         <div>
           <div className="mb-3 flex justify-end"><Button variant="primary" onClick={() => setNewNote(true)}><FilePlus2 size={15} />{t("ملاحظة جديدة", "New note")}</Button></div>
           {notes.length === 0 ? <EmptyState icon={<FilePlus2 />} title={t("لا توجد ملاحظات", "No notes")} /> : (
-            <div className="grid gap-2 sm:grid-cols-2">{[...notes].sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.updatedAt - a.updatedAt).map((n) => (
-              <Link key={n.id} to={`/notes/${n.id}`} className="card-surface p-4 hover:border-accent"><div className="flex items-center gap-1.5 font-extrabold">{n.pinned && <Pin size={13} className="text-accent" />}<span className="truncate" dir="auto">{n.title || t("بدون عنوان", "Untitled")}</span></div><p className="mt-1 line-clamp-2 text-sm text-muted" dir="auto">{n.text.slice(0, 140)}</p><div className="mt-2 text-xs text-muted">{fmtDate(n.updatedAt)}</div></Link>
+            <div className="grid gap-2 md:grid-cols-2">{[...notes].sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.updatedAt - a.updatedAt).map((n) => (
+              <Link key={n.id} to={`/notes/${n.id}`} className="card-surface min-w-0 p-4 hover:border-accent"><div className="flex items-center gap-1.5 font-extrabold">{n.pinned && <Pin size={13} className="shrink-0 text-accent" />}<span className="truncate" dir="auto">{n.title || t("بدون عنوان", "Untitled")}</span></div><p className="mt-1 line-clamp-2 text-sm text-muted" dir="auto">{n.text.slice(0, 140)}</p><div className="mt-2 text-xs text-muted">{fmtDate(n.updatedAt)}</div></Link>
             ))}</div>
           )}
         </div>
       )}
       {tab === "files" && (
         <div className="space-y-4"><UploadZone link={{ subjectId: id }} compact />
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">{files.map((f) => <AttachmentCard key={f.id} att={f} onEdit={setEditFile} />)}</div>
+          <div className="grid grid-cols-1 gap-3 min-[380px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">{files.map((f) => <AttachmentCard key={f.id} att={f} onEdit={setEditFile} />)}</div>
           {files.length === 0 && <p className="text-center text-sm text-muted">{t("لا توجد ملفات", "No files")}</p>}</div>
       )}
       {tab === "cards" && (
         <div>
           <div className="mb-3 flex flex-wrap justify-end gap-2"><Button onClick={() => nav("/flashcards")}>{t("إدارة البطاقات", "Manage cards")}</Button><Button variant="primary" onClick={() => openCard({ subjectId: id })}><Plus size={15} />{t("بطاقة جديدة", "New card")}</Button></div>
-          {cards.length === 0 ? <EmptyState icon={<Layers />} title={t("لا توجد بطاقات", "No cards")} /> : <div className="grid gap-2 sm:grid-cols-2">{cards.slice(0, 40).map((c) => <div key={c.id} className="card-surface p-3 text-sm"><div className="font-bold" dir="auto">{c.front.slice(0, 120)}</div><div className="mt-1 text-xs text-muted">{t("المراجعة القادمة", "Next review")}: {fmtDate(c.due)}</div></div>)}</div>}
+          {cards.length === 0 ? <EmptyState icon={<Layers />} title={t("لا توجد بطاقات", "No cards")} /> : <div className="grid gap-2 md:grid-cols-2">{cards.slice(0, 40).map((c) => <div key={c.id} className="nv-selectable card-surface break-words p-3 text-sm"><div className="font-bold" dir="auto">{c.front.slice(0, 120)}</div><div className="mt-1 text-xs text-muted">{t("المراجعة القادمة", "Next review")}: {fmtDate(c.due)}</div></div>)}</div>}
         </div>
       )}
 

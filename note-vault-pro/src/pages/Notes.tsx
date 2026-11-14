@@ -82,7 +82,7 @@ export default function Notes() {
         <Link to="/trash" className="ms-auto text-sm font-bold text-muted hover:text-fg">{t("سلة المحذوفات", "Trash")}</Link>
       </div>
       {notes && list.length === 0 ? <EmptyState icon={<NotebookText />} title={t("لا توجد ملاحظات", "No notes found")} action={<Button variant="primary" onClick={() => setOpen(true)}>{t("ملاحظة جديدة", "New note")}</Button>} /> : (
-        <div className="grid gap-2 lg:grid-cols-2">{shown.map((n) => <NoteRow key={n.id} n={n} subject={n.subjectId ? sMap.get(n.subjectId) : undefined} />)}</div>
+        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">{shown.map((n) => <NoteRow key={n.id} n={n} subject={n.subjectId ? sMap.get(n.subjectId) : undefined} />)}</div>
       )}
       {sentinel}
       <NewNoteModal open={open} onClose={() => setOpen(false)} />

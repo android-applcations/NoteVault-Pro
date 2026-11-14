@@ -69,7 +69,7 @@ export default function Review() {
     return (
       <div className="mx-auto max-w-lg text-center">
         <div className="card-surface p-8"><Trophy className="mx-auto mb-3 text-warn" size={48} /><h1 className="text-2xl font-black">{t("أحسنت! انتهت الجلسة", "Session complete!")}</h1>
-          <div className="my-5 grid grid-cols-4 gap-2 text-sm">{([[1, t("مرة أخرى", "Again"), "text-danger"], [2, t("صعب", "Hard"), "text-warn"], [3, t("جيد", "Good"), "text-success"], [4, t("سهل", "Easy"), "text-accent"]] as [GradeNum, string, string][]).map(([g, l, c]) => <div key={g} className="rounded-xl bg-surface2 p-3"><div className={cn("text-2xl font-black", c)}>{counts[g]}</div><div className="text-xs text-muted">{l}</div></div>)}</div>
+          <div className="my-5 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">{([[1, t("مرة أخرى", "Again"), "text-danger"], [2, t("صعب", "Hard"), "text-warn"], [3, t("جيد", "Good"), "text-success"], [4, t("سهل", "Easy"), "text-accent"]] as [GradeNum, string, string][]).map(([g, l, c]) => <div key={g} className="rounded-xl bg-surface2 p-3"><div className={cn("text-2xl font-black", c)}>{counts[g]}</div><div className="text-xs text-muted">{l}</div></div>)}</div>
           <p className="text-sm text-muted">{reviewed} {t("مراجعة", "reviews")} · {reviewed ? Math.round((ok / reviewed) * 100) : 0}% {t("نجاح", "success")} · ~{mins} {t("د", "min")}</p>
           <div className="mt-5 flex justify-center gap-2"><Link to="/flashcards"><Button>{t("إحصائيات", "Statistics")}</Button></Link><Link to="/"><Button variant="primary">{t("الرئيسية", "Home")}</Button></Link></div></div>
       </div>
@@ -89,9 +89,9 @@ export default function Review() {
       </div>
       <div className="mt-4">
         {!revealed ? (
-          <Button variant="primary" className="w-full !py-3.5 text-base" onClick={() => setRevealed(true)}>{t("إظهار الإجابة (مسافة)", "Show answer (Space)")}</Button>
+          <Button variant="primary" className="w-full !py-3.5 text-base" onClick={() => setRevealed(true)}>{t("إظهار الإجابة", "Show answer")}</Button>
         ) : (
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {btns.map(([g, label, cls]) => (
               <button key={g} onClick={() => void grade(g)} className={cn("rounded-2xl py-3 text-white shadow transition active:scale-95", cls)}>
                 <div className="text-sm font-extrabold">{label}</div>

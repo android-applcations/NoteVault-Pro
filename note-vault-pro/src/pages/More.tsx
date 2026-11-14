@@ -16,7 +16,7 @@ export default function More() {
   return (
     <div>
       <PageHeader title={t("المزيد", "More")} />
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
         {items.map((i) => <Link key={i.to} to={i.to} className="card-surface flex flex-col items-center gap-2 p-5 text-center text-sm font-bold transition active:scale-95"><i.icon className="text-accent" />{i.l}</Link>)}
         <button onClick={() => setQuickOpen(true)} className="card-surface flex flex-col items-center gap-2 p-5 text-center text-sm font-bold transition active:scale-95"><Zap className="text-accent" />{t("التقاط سريع", "Quick capture")}</button>
       </div>

@@ -30,7 +30,7 @@ function ImageView({ att }: { att: Attachment }) {
   const [ocrBusy, setOcrBusy] = useState(false);
   const [ocrPct, setOcrPct] = useState(0);
   const [ocrText, setOcrText] = useState("");
-  if (missing) return <EmptyState icon={<FileQuestion />} title={t("الملف غير موجود في التخزين", "File missing from storage")} />;
+  if (missing) return <EmptyState icon={<FileQuestion />} title={t("تعذر العثور على الملف", "File could not be found")} />;
 
   const runOcr = async () => {
     if (ocrBusy) return;
@@ -44,7 +44,7 @@ function ImageView({ att }: { att: Attachment }) {
       setOcrText(text);
       if (!text) toast(t("لم يُعثر على نص واضح في الصورة", "No readable text found"), "info");
     } catch {
-      toast(t("تعذر استخراج النص", "OCR failed"), "err");
+      toast(t("تعذر استخراج النص", "Could not extract text"), "err");
     } finally {
       setOcrBusy(false);
     }
@@ -58,14 +58,14 @@ function ImageView({ att }: { att: Attachment }) {
         <IconButton label={t("تدوير", "Rotate")} onClick={() => setRot((r) => (r + 90) % 360)}><RotateCw size={18} /></IconButton>
         <span className="self-center text-xs font-bold text-muted" dir="ltr">{Math.round(zoom * 100)}%</span>
         <div className="ms-auto flex flex-wrap items-center gap-2">
-          <Select aria-label={t("لغة OCR", "OCR language")} value={ocrLang} onChange={(e) => setOcrLang(e.target.value as OcrLang)} className="!w-auto">
+          <Select aria-label={t("لغة النص", "Text language")} value={ocrLang} onChange={(e) => setOcrLang(e.target.value as OcrLang)} className="!w-auto">
             <option value="ara+eng">{t("العربية + الإنجليزية", "Arabic + English")}</option>
             <option value="eng">English</option>
             <option value="ara">{t("العربية", "Arabic")}</option>
           </Select>
           <Button disabled={ocrBusy} onClick={() => void runOcr()}>
             <ScanText size={16} />
-            {ocrBusy ? `${t("جارٍ الاستخراج…", "Extracting…")} ${ocrPct}%` : t("استخراج النص (OCR)", "Extract text (OCR)")}
+            {ocrBusy ? `${t("جارٍ الاستخراج…", "Extracting…")} ${ocrPct}%` : t("استخراج النص", "Extract text")}
           </Button>
         </div>
       </div>
@@ -74,7 +74,7 @@ function ImageView({ att }: { att: Attachment }) {
       </div>
       {ocrText && (
         <div className="card-surface mt-3 space-y-2 p-4">
-          <div className="text-sm font-extrabold">{t("النص المستخرج (OCR)", "Extracted text (OCR)")}</div>
+          <div className="text-sm font-extrabold">{t("النص المستخرج", "Extracted text")}</div>
           <Textarea rows={5} value={ocrText} onChange={(e) => setOcrText(e.target.value)} dir="auto" />
           <div className="flex flex-wrap gap-2">
             <Button onClick={async () => { await navigator.clipboard?.writeText(ocrText); toast(t("تم النسخ", "Copied")); }}><Copy size={15} />{t("نسخ", "Copy")}</Button>
@@ -158,7 +158,7 @@ function PdfLoader({ att, page, q }: { att: Attachment; page?: number; q?: strin
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [att.id, att.blobId]);
   if (blob === undefined) return <Skeleton className="h-[60dvh]" />;
-  if (!blob) return <EmptyState icon={<FileQuestion />} title={t("الملف غير موجود في التخزين", "File missing from storage")} />;
+  if (!blob) return <EmptyState icon={<FileQuestion />} title={t("تعذر العثور على الملف", "File could not be found")} />;
   return <Suspense fallback={<Skeleton className="h-[60dvh]" />}><PdfViewer att={att} blob={blob} initialPage={page} initialQuery={q} /></Suspense>;
 }
 

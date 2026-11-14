@@ -111,34 +111,34 @@ test("Semesters modal stability, real lecture audio recording + mini bar + note 
   await expect(page).toHaveURL(/#\/files\/.+\?t=/);
   await expect(page.getByRole("button", { name: "Play", exact: true })).toBeVisible();
   await expect(page.getByText("Data hazard diagram")).toBeVisible();
-  await expect(page.getByRole("heading", { name: /Offline Transcription/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /^Transcription$/ })).toBeVisible();
 
-  // Before installing a model, explicit banner guides the user cleanly
-  await expect(page.getByText("No offline speech model installed yet")).toBeVisible();
+  // Before installing a language pack, clean non-technical banner guides the user
+  await expect(page.getByText("Transcription is not ready yet", { exact: true })).toBeVisible();
 
-  // 3. Settings -> Offline Speech Model Manager: verify catalog + local model pack import + language guard + SHA-256 tamper check
+  // 3. Settings -> Lecture Transcription: verify catalog + local pack import + language guard + verify check
   await page.goto("/#/settings");
-  await expect(page.getByRole("heading", { name: "Offline Speech Recognition Models" })).toBeVisible();
-  await expect(page.getByText("Whisper Tiny (Multilingual)")).toBeVisible();
-  await expect(page.getByText("Whisper Base (Higher accuracy)")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Lecture Transcription" })).toBeVisible();
+  await expect(page.getByText("Compact Pack (Multilingual)")).toBeVisible();
+  await expect(page.getByText("High Accuracy Pack (Multilingual)")).toBeVisible();
 
-  // Import English-only mock pack cleanly & verify SHA-256
-  await page.locator('input[aria-label="Import local speech model pack"]').setInputFiles({
+  // Import English-only mock pack cleanly & verify integrity
+  await page.locator('input[aria-label="Import language pack"]').setInputFiles({
     name: "en-pack.zip",
     mimeType: "application/zip",
     buffer: buildEnglishModelPackZip(),
   });
   await expect(page.getByText("English Local Pack E2E", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Verify", exact: true }).click();
-  await expect(page.getByText("Model integrity verified")).toBeVisible();
+  await expect(page.getByText("Language pack verified")).toBeVisible();
 
-  // Navigate back to the saved audio file -> verify language guard blocks Arabic on EN-only model
+  // Navigate back to the saved audio file -> verify language guard blocks Arabic on EN-only pack
   await page.goBack();
-  await expect(page.getByRole("heading", { name: /Offline Transcription/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /^Transcription$/ })).toBeVisible();
   const langSelect = page.locator("select").filter({ hasText: "Arabic (AR)" });
   await langSelect.selectOption("ar");
-  await expect(page.getByText(/does not support Arabic or auto-detect/i)).toBeVisible();
-  await expect(page.getByRole("button", { name: /Transcribe offline/i })).toBeDisabled();
+  await expect(page.getByText(/only supports English/i)).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Transcribe$/i })).toBeDisabled();
 
   // Zero uncaught page errors or CSP violations across the entire flow
   const cspViolations = await page.evaluate(() => (window as unknown as { __cspViolations?: string[] }).__cspViolations ?? []);

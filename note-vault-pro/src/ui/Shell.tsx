@@ -54,15 +54,45 @@ export function Shell({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem("nv-sidebar") === "1");
   const searchRef = useRef<HTMLInputElement>(null);
   const [q, setQ] = useState("");
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
   const isEditor = /^\/notes\/[^/]+$/.test(loc.pathname) || /^\/files\//.test(loc.pathname);
 
   useEffect(() => {
     registerServiceWorker((apply) => toast(t("يتوفر إصدار جديد من التطبيق", "A new version is available"), "info", { label: t("تحديث", "Update"), run: apply }));
     // storage pressure warning (never deletes anything)
     navigator.storage?.estimate?.().then((e) => {
-      if (e?.quota && e.usage && e.usage / e.quota > 0.85) toast(t("مساحة التخزين تقترب من حدها. صدّر نسخة احتياطية واحذف ما لا تحتاجه.", "Storage is almost full. Export a backup and remove what you don't need."), "err");
+      if (e?.quota && e.usage && e.usage / e.quota > 0.85) toast(t("مساحة التخزين تقترب من الامتلاء — احتفظ بنسخة احتياطية.", "Storage is almost full — keep a backup."), "err");
     }).catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    let baseline = Math.max(window.innerHeight, vv.height);
+    const update = () => {
+      if (window.innerWidth >= 1024) {
+        setKeyboardOpen(false);
+        return;
+      }
+      baseline = Math.max(baseline, window.innerHeight);
+      const active = document.activeElement;
+      const isEditable =
+        !!active &&
+        (active.tagName === "INPUT" ||
+          active.tagName === "TEXTAREA" ||
+          active.tagName === "SELECT" ||
+          (active as HTMLElement).isContentEditable);
+      setKeyboardOpen(isEditable && baseline - vv.height > 130);
+    };
+    vv.addEventListener("resize", update);
+    window.addEventListener("focusin", update);
+    window.addEventListener("focusout", update);
+    return () => {
+      vv.removeEventListener("resize", update);
+      window.removeEventListener("focusin", update);
+      window.removeEventListener("focusout", update);
+    };
   }, []);
 
   useEffect(() => {
@@ -85,7 +115,7 @@ export function Shell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-dvh">
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:start-3 focus:top-3 focus:z-[200] focus:rounded-lg focus:bg-primary focus:px-3 focus:py-2 focus:text-primary-fg">{t("تخطي إلى المحتوى", "Skip to content")}</a>
-      <aside className={cn("fixed inset-y-0 start-0 z-40 hidden flex-col border-e border-line bg-surface p-3 transition-[width] duration-200 lg:flex", collapsed ? "w-[76px]" : "w-64")} aria-label={t("التنقل الرئيسي", "Main navigation")}>
+      <aside className={cn("safe-top safe-bottom fixed inset-y-0 start-0 z-40 hidden flex-col border-e border-line bg-surface p-3 transition-[width] duration-200 lg:flex", collapsed ? "w-[76px]" : "w-60 xl:w-64")} aria-label={t("التنقل الرئيسي", "Main navigation")}>
         <div className={cn("mb-4 flex items-center gap-3 px-1", collapsed && "justify-center")}>
           <Logo />
           {!collapsed && <div className="leading-tight"><div className="text-lg font-black tracking-tight">NoteVault</div><div className="text-[11px] font-bold text-accent">PRO</div></div>}
@@ -108,21 +138,23 @@ export function Shell({ children }: { children: ReactNode }) {
         </IconButton>
       </aside>
 
-      <div className={cn("transition-[padding] duration-200", collapsed ? "lg:ps-[76px]" : "lg:ps-64")}>
-        <header className="safe-top sticky top-0 z-30 flex items-center gap-2 border-b border-line bg-bg/85 px-3 py-2.5 backdrop-blur-lg sm:px-6">
-          <div className="flex items-center gap-2 lg:hidden"><Logo size={30} /></div>
-          <form onSubmit={submitSearch} className="relative min-w-0 flex-1 sm:max-w-xl" role="search">
-            <Search size={16} className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-muted" />
-            <input ref={searchRef} value={q} onChange={(e) => setQ(e.target.value)} aria-label={t("بحث شامل", "Universal search")}
-              placeholder={t("ابحث في كل شيء… (Ctrl+K)", "Search everything… (Ctrl+K)")} className="h-10 w-full rounded-xl border border-line bg-surface ps-9 pe-3 text-sm placeholder:text-muted/70 focus:border-accent" />
-          </form>
-          <div className="ms-auto flex items-center gap-1">
-            <IconButton label={t("التقاط سريع (Alt+N)", "Quick capture (Alt+N)")} onClick={() => setQuickOpen(true)} className="bg-accent/15 text-accent hover:bg-accent/25"><Zap size={18} /></IconButton>
-            <IconButton label={t("تبديل اللغة", "Switch language")} onClick={() => setPrefs({ lang: lang === "ar" ? "en" : "ar" })}><Languages size={18} /></IconButton>
-            <IconButton label={t("تبديل المظهر", "Toggle theme")} onClick={() => setPrefs({ theme: dark ? "light" : "dark" })}>{dark ? <Sun size={18} /> : <Moon size={18} />}</IconButton>
+      <div className={cn("transition-[padding] duration-200", collapsed ? "lg:ps-[76px]" : "lg:ps-60 xl:ps-64")}>
+        <header className="safe-top safe-x sticky top-0 z-30 flex items-center gap-2 border-b border-line bg-bg/85 backdrop-blur-lg">
+          <div className="flex w-full items-center gap-2 px-3 py-2 sm:px-6 sm:py-2.5">
+            <div className="flex shrink-0 items-center gap-2 lg:hidden"><Logo size={30} /></div>
+            <form onSubmit={submitSearch} className="relative min-w-0 flex-1 sm:max-w-xl" role="search">
+              <Search size={16} className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-muted" />
+              <input ref={searchRef} value={q} onChange={(e) => setQ(e.target.value)} aria-label={t("بحث شامل", "Universal search")}
+                placeholder={t("ابحث في ملاحظاتك وملفاتك…", "Search notes & files…")} className="h-10 w-full min-w-0 rounded-xl border border-line bg-surface ps-9 pe-3 text-sm placeholder:text-muted/70 focus:border-accent" />
+            </form>
+            <div className="ms-auto flex shrink-0 items-center gap-1">
+              <IconButton label={t("التقاط سريع", "Quick capture")} onClick={() => setQuickOpen(true)} className="bg-accent/15 text-accent hover:bg-accent/25"><Zap size={18} /></IconButton>
+              <IconButton label={t("تبديل اللغة", "Switch language")} onClick={() => setPrefs({ lang: lang === "ar" ? "en" : "ar" })}><Languages size={18} /></IconButton>
+              <IconButton label={t("تبديل المظهر", "Toggle theme")} onClick={() => setPrefs({ theme: dark ? "light" : "dark" })}>{dark ? <Sun size={18} /> : <Moon size={18} />}</IconButton>
+            </div>
           </div>
         </header>
-        <main id="main" tabIndex={-1} className={cn("mx-auto w-full px-4 pb-28 pt-5 sm:px-6 lg:pb-10", isEditor ? "max-w-7xl" : "max-w-6xl")}>
+        <main id="main" tabIndex={-1} className={cn("safe-x mx-auto w-full px-3.5 pb-[calc(6.75rem+env(safe-area-inset-bottom))] pt-4 sm:px-6 sm:pt-5 lg:pb-10", isEditor ? "max-w-7xl" : "max-w-6xl")}>
           {/* Keyed fade-in only: an exit animation would keep a second live copy of the outgoing page mounted */}
           <motion.div key={loc.pathname} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}>
             {children}
@@ -130,8 +162,8 @@ export function Shell({ children }: { children: ReactNode }) {
         </main>
       </div>
 
-      {/* Mobile bottom navigation */}
-      <nav className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 backdrop-blur-lg lg:hidden" aria-label={t("التنقل", "Navigation")}>
+      {/* Mobile bottom navigation — tucks away cleanly when the virtual keyboard is open */}
+      <nav className={cn("safe-bottom safe-x fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 backdrop-blur-lg lg:hidden", keyboardOpen && "hidden")} aria-label={t("التنقل", "Navigation")}>
         <div className="mx-auto grid max-w-lg grid-cols-5 items-end px-2 pt-1.5 pb-1.5">
           {[MAIN[0], MAIN[1]].map((n) => <MobileLink key={n.to} n={n} />)}
           <div className="relative flex justify-center">
@@ -151,7 +183,10 @@ export function Shell({ children }: { children: ReactNode }) {
         <div
           role="region"
           aria-label={t("مسجل المحاضرة النشط", "Active lecture recorder")}
-          className="fixed bottom-24 start-4 z-40 flex items-center gap-2 rounded-2xl border border-danger/35 bg-surface/95 px-3 py-2 shadow-xl backdrop-blur-md lg:bottom-6 lg:start-auto lg:end-56"
+          className={cn(
+            "nv-no-select fixed start-3 end-3 z-40 flex items-center justify-between gap-2 rounded-2xl border border-danger/35 bg-surface/95 px-3 py-2 shadow-xl backdrop-blur-md sm:end-auto sm:max-w-sm lg:bottom-6 lg:start-auto lg:end-56",
+            keyboardOpen ? "bottom-3" : "bottom-[calc(5.25rem+env(safe-area-inset-bottom))]"
+          )}
         >
           <span
             className={cn(

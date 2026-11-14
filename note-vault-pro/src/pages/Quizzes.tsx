@@ -31,7 +31,7 @@ export default function Quizzes() {
     <div>
       <PageHeader title={t("منشئ الاختبارات", "Quiz builder")} subtitle={t("أنشئ اختبارات من ملاحظاتك واختبر نفسك دون اتصال", "Build quizzes from your notes and test yourself offline")} actions={<Button variant="primary" onClick={() => void create()}><Plus size={16} />{t("اختبار جديد", "New quiz")}</Button>} />
       {quizzes && quizzes.length === 0 ? <EmptyState icon={<ClipboardCheck />} title={t("لا توجد اختبارات", "No quizzes yet")} action={<Button variant="primary" onClick={() => void create()}>{t("إنشاء اختبار", "Create a quiz")}</Button>} /> : (
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {(quizzes ?? []).sort((a, b) => b.updatedAt - a.updatedAt).map((q) => {
             const at = attempts.filter((a) => a.quizId === q.id);
             const best = at.length ? Math.max(...at.map((a) => a.percent)) : null;

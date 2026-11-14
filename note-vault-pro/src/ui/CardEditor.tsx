@@ -89,7 +89,7 @@ export function CardEditor({ open, onClose, card, prefill, onSaved }: { open: bo
         {!deckId && !card && <Field label={t("أو أنشئ مجموعة جديدة", "Or create a new deck")}>{(id) => <Input id={id} value={newDeck} onChange={(e) => setNewDeck(e.target.value)} />}</Field>}
         <Field label={hint[type]}>{(id) => <Textarea id={id} rows={3} value={front} onChange={(e) => setFront(e.target.value)} dir="auto" />}</Field>
         {needsImage && (
-          <Field label={t("الصورة (من مكتبة الملفات)", "Image (from the file vault)")} hint={images.length ? undefined : t("أضف صورة إلى المكتبة أولاً", "Add an image to the vault first")}>
+          <Field label={t("الصورة (من مكتبة الملفات)", "Image (from your file library)")} hint={images.length ? undefined : t("أضف صورة إلى المكتبة أولاً", "Add an image to your library first")}>
             {(id) => <Select id={id} value={imageId} onChange={(e) => setImageId(e.target.value)}><option value="">—</option>{images.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</Select>}
           </Field>
         )}

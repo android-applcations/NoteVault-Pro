@@ -76,7 +76,7 @@ function ImageViewer({
       setOcrText(text);
       if (!text) toast(t("لم يُعثر على نص واضح في الصورة", "No readable text found in image"), "info");
     } catch {
-      toast(t("تعذر استخراج النص", "OCR failed"), "err");
+      toast(t("تعذر استخراج النص", "Could not extract text"), "err");
     } finally {
       setOcrBusy(false);
     }
@@ -91,18 +91,18 @@ function ImageViewer({
       {att && (
         <>
           <Field label={t("وصف الصورة", "Image description")} className="mt-3">
-            {(id) => <div className="flex gap-2"><Input id={id} value={desc} onChange={(e) => setDesc(e.target.value)} dir="auto" /><Button onClick={async () => { await updateAttachment(att.id, { description: desc }); toast(t("تم حفظ الوصف", "Description saved")); }}>{t("حفظ", "Save")}</Button></div>}
+            {(id) => <div className="flex flex-wrap gap-2"><Input id={id} value={desc} onChange={(e) => setDesc(e.target.value)} dir="auto" className="min-w-0 flex-1" /><Button onClick={async () => { await updateAttachment(att.id, { description: desc }); toast(t("تم حفظ الوصف", "Description saved")); }}>{t("حفظ", "Save")}</Button></div>}
           </Field>
           <div className="mt-3 rounded-xl border border-line bg-surface2/50 p-3">
             <div className="flex flex-wrap items-center gap-2">
-              <Select aria-label={t("لغة OCR", "OCR language")} value={ocrLang} onChange={(e) => setOcrLang(e.target.value as OcrLang)} className="!w-auto">
+              <Select aria-label={t("لغة النص", "Text language")} value={ocrLang} onChange={(e) => setOcrLang(e.target.value as OcrLang)} className="!w-auto">
                 <option value="ara+eng">{t("العربية + الإنجليزية", "Arabic + English")}</option>
                 <option value="eng">English</option>
                 <option value="ara">{t("العربية", "Arabic")}</option>
               </Select>
               <Button disabled={ocrBusy} onClick={() => void extractOcr()}>
                 <ScanText size={16} />
-                {ocrBusy ? `${t("جارٍ الاستخراج…", "Extracting…")} ${ocrPct}%` : t("استخراج النص (OCR)", "Extract text (OCR)")}
+                {ocrBusy ? `${t("جارٍ الاستخراج…", "Extracting…")} ${ocrPct}%` : t("استخراج النص", "Extract text")}
               </Button>
             </div>
             {ocrText && (
@@ -133,7 +133,7 @@ const SLASH: SlashCmd[] = [
   { id: "quote", ar: "اقتباس", en: "Quote", keys: "quote اقتباس", icon: <Quote size={16} />, run: (e) => e.chain().focus().toggleBlockquote().run() },
   { id: "callout", ar: "ملاحظة جانبية", en: "Side note", keys: "callout note ملاحظة", icon: <StickyNote size={16} />, run: (e) => e.chain().focus().toggleWrap("callout").run() },
   { id: "code", ar: "كود برمجي", en: "Code block", keys: "code كود", icon: <Code2 size={16} />, run: (e) => e.chain().focus().toggleCodeBlock().run() },
-  { id: "formula", ar: "معادلة رياضية (LaTeX)", en: "Math formula (LaTeX)", keys: "formula math latex معادلة رياضيات", icon: <Sigma size={16} />, run: () => window.dispatchEvent(new CustomEvent("nv-open-formula")) },
+  { id: "formula", ar: "معادلة رياضية", en: "Math formula", keys: "formula math latex معادلة رياضيات", icon: <Sigma size={16} />, run: () => window.dispatchEvent(new CustomEvent("nv-open-formula")) },
   { id: "table", ar: "جدول", en: "Table", keys: "table جدول", icon: <Table2 size={16} />, run: (e) => e.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
   { id: "hr", ar: "فاصل", en: "Divider", keys: "divider hr فاصل", icon: <Minus size={16} />, run: (e) => e.chain().focus().setHorizontalRule().run() },
 ];
@@ -320,19 +320,19 @@ export function RichEditor({ content, noteId, onUpdate, onCreateCard, searchTerm
 
   return (
     <div className="editor-surface">
-      <div className="sticky top-[57px] z-20 -mx-4 border-b border-line bg-bg/95 px-3 backdrop-blur sm:mx-0 sm:rounded-2xl sm:border" role="toolbar" aria-label={t("أدوات التنسيق", "Formatting tools")}>
+      <div className="sticky top-[calc(3.6rem+env(safe-area-inset-top))] z-20 -mx-3.5 border-b border-line bg-bg/95 px-3 backdrop-blur sm:mx-0 sm:rounded-2xl sm:border" role="toolbar" aria-label={t("أدوات التنسيق", "Formatting tools")}>
         <div className="flex items-center gap-0.5 overflow-x-auto py-1.5">
-          <Btn label={t("تراجع (Ctrl+Z)", "Undo (Ctrl+Z)")} onClick={() => c().undo().run()} disabled={!st.canUndo}><Undo2 size={17} className="rtl:-scale-x-100" /></Btn>
-          <Btn label={t("إعادة (Ctrl+Y)", "Redo (Ctrl+Y)")} onClick={() => c().redo().run()} disabled={!st.canRedo}><Redo2 size={17} className="rtl:-scale-x-100" /></Btn>
+          <Btn label={t("تراجع", "Undo")} onClick={() => c().undo().run()} disabled={!st.canUndo}><Undo2 size={17} className="rtl:-scale-x-100" /></Btn>
+          <Btn label={t("إعادة", "Redo")} onClick={() => c().redo().run()} disabled={!st.canRedo}><Redo2 size={17} className="rtl:-scale-x-100" /></Btn>
           <Sep />
           <Btn label={t("عنوان 1", "Heading 1")} active={st.h1} onClick={() => c().toggleHeading({ level: 1 }).run()}><Heading1 size={17} /></Btn>
           <Btn label={t("عنوان 2", "Heading 2")} active={st.h2} onClick={() => c().toggleHeading({ level: 2 }).run()}><Heading2 size={17} /></Btn>
           <Btn label={t("عنوان 3", "Heading 3")} active={st.h3} onClick={() => c().toggleHeading({ level: 3 }).run()}><Heading3 size={17} /></Btn>
           <Btn label={t("نص عادي", "Normal text")} onClick={() => c().setParagraph().run()}><Pilcrow size={17} /></Btn>
           <Sep />
-          <Btn label={t("عريض (Ctrl+B)", "Bold (Ctrl+B)")} active={st.bold} onClick={() => c().toggleBold().run()}><Bold size={17} /></Btn>
-          <Btn label={t("مائل (Ctrl+I)", "Italic (Ctrl+I)")} active={st.italic} onClick={() => c().toggleItalic().run()}><Italic size={17} /></Btn>
-          <Btn label={t("تسطير (Ctrl+U)", "Underline (Ctrl+U)")} active={st.underline} onClick={() => c().toggleUnderline().run()}><Underline size={17} /></Btn>
+          <Btn label={t("عريض", "Bold")} active={st.bold} onClick={() => c().toggleBold().run()}><Bold size={17} /></Btn>
+          <Btn label={t("مائل", "Italic")} active={st.italic} onClick={() => c().toggleItalic().run()}><Italic size={17} /></Btn>
+          <Btn label={t("تسطير", "Underline")} active={st.underline} onClick={() => c().toggleUnderline().run()}><Underline size={17} /></Btn>
           <Btn label={t("شطب", "Strikethrough")} active={st.strike} onClick={() => c().toggleStrike().run()}><Strikethrough size={17} /></Btn>
           <Btn label={t("لون النص", "Text colour")} active={palette === "color"} onClick={() => setPalette(palette === "color" ? null : "color")}><Palette size={17} /></Btn>
           <Btn label={t("تمييز", "Highlight")} active={palette === "hl" || st.hl} onClick={() => setPalette(palette === "hl" ? null : "hl")}><Highlighter size={17} /></Btn>
@@ -350,7 +350,7 @@ export function RichEditor({ content, noteId, onUpdate, onCreateCard, searchTerm
           <Btn label={t("اقتباس", "Quote")} active={st.quote} onClick={() => c().toggleBlockquote().run()}><Quote size={17} /></Btn>
           <Btn label={t("ملاحظة جانبية", "Side note")} active={st.callout} onClick={() => c().toggleWrap("callout").run()}><StickyNote size={17} /></Btn>
           <Btn label={t("كود برمجي", "Code block")} active={st.code} onClick={() => c().toggleCodeBlock().run()}><Code2 size={17} /></Btn>
-          <Btn label={t("معادلة رياضية (LaTeX)", "Math formula (LaTeX)")} active={st.formula} onClick={openFormula}><Sigma size={17} /></Btn>
+          <Btn label={t("معادلة رياضية", "Math formula")} active={st.formula} onClick={openFormula}><Sigma size={17} /></Btn>
           <Btn label={t("فاصل", "Divider")} onClick={() => c().setHorizontalRule().run()}><Minus size={17} /></Btn>
           <Btn label={t("رابط", "Link")} active={st.link} onClick={openLink}><Link2 size={17} /></Btn>
           <Btn label={t("جدول", "Table")} active={st.table} onClick={() => c().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}><Table2 size={17} /></Btn>
@@ -390,7 +390,7 @@ export function RichEditor({ content, noteId, onUpdate, onCreateCard, searchTerm
       <EditorContent editor={editor} />
 
       {slash && slashItems.length > 0 && (
-        <div role="listbox" aria-label={t("أوامر سريعة", "Quick commands")} className="fixed z-[90] max-h-72 w-60 overflow-y-auto rounded-2xl border border-line bg-surface p-1 shadow-2xl" style={{ top: Math.min(slash.y + 6, window.innerHeight - 300), left: Math.max(8, Math.min(slash.x, window.innerWidth - 250)) }}>
+        <div role="listbox" aria-label={t("أوامر سريعة", "Quick commands")} className="fixed z-[90] max-h-72 w-60 max-w-[calc(100vw-1rem)] overflow-y-auto rounded-2xl border border-line bg-surface p-1 shadow-2xl" style={{ top: Math.min(slash.y + 6, window.innerHeight - 300), left: Math.max(8, Math.min(slash.x, window.innerWidth - 252)) }}>
           {slashItems.map((cmd, i) => (
             <button key={cmd.id} role="option" aria-selected={i === slashIdx} onMouseDown={(e) => e.preventDefault()} onMouseEnter={() => setSlashIdx(i)} onClick={() => runSlash(editor, cmd)}
               className={cn("flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-start text-sm font-semibold", i === slashIdx && "bg-surface2")}>
@@ -401,9 +401,9 @@ export function RichEditor({ content, noteId, onUpdate, onCreateCard, searchTerm
       )}
 
       <Modal open={linkOpen} onClose={() => setLinkOpen(false)} title={t("إدراج رابط", "Insert link")} footer={<><Button onClick={() => setLinkOpen(false)}>{t("إلغاء", "Cancel")}</Button><Button variant="primary" onClick={applyLink}>{t("تطبيق", "Apply")}</Button></>}>
-        <Field label={t("العنوان (URL)", "URL")} hint={t("اتركه فارغاً لإزالة الرابط", "Leave empty to remove the link")}>{(id) => <Input id={id} dir="ltr" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} onKeyDown={(e) => e.key === "Enter" && applyLink()} />}</Field>
+        <Field label={t("الرابط", "Link address")} hint={t("اتركه فارغاً لإزالة الرابط", "Leave empty to remove the link")}>{(id) => <Input id={id} dir="ltr" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} onKeyDown={(e) => e.key === "Enter" && applyLink()} />}</Field>
       </Modal>
-      <Modal open={formulaOpen} onClose={() => setFormulaOpen(false)} title={t("إدراج معادلة رياضية (LaTeX)", "Insert math formula (LaTeX)")} wide footer={<><Button onClick={() => setFormulaOpen(false)}>{t("إلغاء", "Cancel")}</Button><Button variant="primary" onClick={insertFormula}>{t("إدراج", "Insert")}</Button></>}>
+      <Modal open={formulaOpen} onClose={() => setFormulaOpen(false)} title={t("إدراج معادلة رياضية", "Insert math formula")} wide footer={<><Button onClick={() => setFormulaOpen(false)}>{t("إلغاء", "Cancel")}</Button><Button variant="primary" onClick={insertFormula}>{t("إدراج", "Insert")}</Button></>}>
         <div className="space-y-3">
           <div className="flex flex-wrap gap-1.5">
             {[
@@ -420,7 +420,7 @@ export function RichEditor({ content, noteId, onUpdate, onCreateCard, searchTerm
               </Button>
             ))}
           </div>
-          <Field label={t("صيغة LaTeX", "LaTeX expression")}>
+          <Field label={t("صيغة المعادلة", "Formula expression")}>
             {(id) => <Input id={id} dir="ltr" value={formulaTex} onChange={(e) => setFormulaTex(e.target.value)} onKeyDown={(e) => e.key === "Enter" && insertFormula()} />}
           </Field>
           <div className="rounded-xl border border-line bg-surface2/60 p-4">

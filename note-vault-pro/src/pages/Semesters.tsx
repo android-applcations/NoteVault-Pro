@@ -109,7 +109,7 @@ export default function Semesters() {
       >
         <form id="new-semester-form" onSubmit={(e) => { e.preventDefault(); void save(); }} className="flex flex-col gap-3">
           <Field label={t("اسم الفصل", "Name")}>{(id) => <Input ref={nameRef} id={id} value={f.name} onChange={(e) => setF((p) => ({ ...p, name: e.target.value }))} placeholder={t("الفصل الأول 2025", "Fall 2025")} dir="auto" />}</Field>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label={t("البداية", "Start")}>{(id) => <Input id={id} type="date" value={f.startDate} onChange={(e) => setF((p) => ({ ...p, startDate: e.target.value }))} />}</Field>
             <Field label={t("النهاية", "End")}>{(id) => <Input id={id} type="date" value={f.endDate} onChange={(e) => setF((p) => ({ ...p, endDate: e.target.value }))} />}</Field>
           </div>

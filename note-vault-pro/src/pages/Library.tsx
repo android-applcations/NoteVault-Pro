@@ -53,7 +53,7 @@ export default function Library() {
   const kinds: [FileKind | "all", string][] = [["all", t("الكل", "All")], ["pdf", "PDF"], ["image", t("صور", "Images")], ["audio", t("صوت", "Audio")], ["text", t("نصوص", "Text")]];
   return (
     <div>
-      <PageHeader title={t("مكتبة الملفات", "File vault")} subtitle={t("كل ملفاتك في مكان واحد وتعمل دون اتصال", "All your files in one place — available offline")}
+      <PageHeader title={t("مكتبة الملفات", "File vault")} subtitle={t("كل ملفاتك منظمة في مكان واحد", "All your files organized in one place")}
         actions={<div className="flex rounded-xl bg-surface2 p-1" role="group" aria-label={t("طريقة العرض", "View")}>
           <button aria-pressed={view === "grid"} aria-label={t("شبكة", "Grid")} onClick={() => setView("grid")} className={`rounded-lg p-2 ${view === "grid" ? "bg-surface shadow" : "text-muted"}`}><LayoutGrid size={16} /></button>
           <button aria-pressed={view === "list"} aria-label={t("قائمة", "List")} onClick={() => setView("list")} className={`rounded-lg p-2 ${view === "list" ? "bg-surface shadow" : "text-muted"}`}><List size={16} /></button></div>} />
@@ -66,11 +66,11 @@ export default function Library() {
       </div>
       <div className="mb-4 flex flex-wrap items-center gap-2">
         {kinds.map(([k, l]) => <Chip key={k} active={kind === k} onClick={() => setKind(k)}>{l}</Chip>)}
-        <div className="ms-auto w-44"><Select aria-label={t("الترتيب", "Sort")} value={sort} onChange={(e) => setSort(e.target.value)}>
+        <div className="w-full sm:ms-auto sm:w-44"><Select aria-label={t("الترتيب", "Sort")} value={sort} onChange={(e) => setSort(e.target.value)}>
           <option value="date-desc">{t("الأحدث", "Newest")}</option><option value="date-asc">{t("الأقدم", "Oldest")}</option><option value="name-asc">{t("الاسم (أ→ي)", "Name (A→Z)")}</option><option value="name-desc">{t("الاسم (ي→أ)", "Name (Z→A)")}</option><option value="size-desc">{t("الأكبر حجماً", "Largest")}</option><option value="size-asc">{t("الأصغر حجماً", "Smallest")}</option></Select></div>
       </div>
       {files && list.length === 0 ? <EmptyState icon={<FolderOpen />} title={t("لا توجد ملفات", "No files")} hint={t("أضف ملفات PDF أو صوراً أو نصوصاً أو تسجيلات.", "Add PDFs, images, text files or recordings.")} /> : view === "grid" ? (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">{shown.map((a) => <div key={a.id}><AttachmentCard att={a} onEdit={setEdit} /><LinkedTo a={a} /></div>)}</div>
+        <div className="grid grid-cols-1 gap-3 min-[380px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">{shown.map((a) => <div key={a.id} className="min-w-0"><AttachmentCard att={a} onEdit={setEdit} /><LinkedTo a={a} /></div>)}</div>
       ) : (
         <div className="space-y-2">{shown.map((a) => <div key={a.id}><AttachmentCard att={a} onEdit={setEdit} list /><LinkedTo a={a} /></div>)}</div>
       )}

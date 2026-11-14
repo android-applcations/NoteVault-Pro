@@ -75,7 +75,7 @@ export function useFailureText() {
       case "empty": return t("الملف فارغ", "File is empty");
       case "mismatch": return t("محتوى الملف لا يطابق نوعه", "File content does not match its type");
       case "binary_text": return t("الملف النصي يحتوي بيانات ثنائية", "Text file contains binary data");
-      case "bad_encoding": return t("ترميز النص غير صالح (UTF-8)", "Invalid text encoding (UTF-8 required)");
+      case "bad_encoding": return t("تعذر قراءة ترميز الملف النصي", "Could not read text file encoding");
       case "dimensions": return t("أبعاد الصورة كبيرة جداً أو تتجاوز الحد المسموح", "Image dimensions are too large or exceed safe limits");
       case "corrupt": return t("الملف تالف أو بنيته غير صالحة", "File is corrupted or has invalid structure");
       case "quota": return t("مساحة التخزين ممتلئة", "Storage is full");
@@ -123,7 +123,7 @@ export function UploadZone({ link, category, compact, onDone }: { link?: FileLin
       const res = await addFiles(files, link, { category });
       const ok = res.filter((r) => r.ok);
       const bad = res.filter((r) => !r.ok);
-      if (ok.length) toast(t(`تمت إضافة ${ok.length} ملف`, `${ok.length} file(s) added`) + (ok.some((r) => r.deduped) ? t(" (لم يتكرر التخزين للملفات المطابقة)", " (identical files stored once)") : ""));
+      if (ok.length) toast(t(`تمت إضافة ${ok.length} ملف`, `${ok.length} file(s) added`));
       for (const b of bad) toast(`${b.name}: ${failText(b.reason)}`, "err");
       onDone?.(ok.map((r) => r.attachment!));
     } finally {

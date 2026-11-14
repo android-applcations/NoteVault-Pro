@@ -95,13 +95,13 @@ export function LectureRecorderPanel({ lectureId, subjectId, lectureTitle }: Lec
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (msg === "MIC_PERMISSION_DENIED") {
-        toast(t("تم رفض إذن الميكروفون. فعّله من إعدادات المتصفح.", "Microphone permission denied. Allow mic access in browser settings."), "err");
+        toast(t("يرجى السماح بالوصول إلى الميكروفون من إعدادات الجهاز.", "Microphone access is required. Allow mic permission in device settings."), "err");
       } else if (msg === "MIC_UNSUPPORTED") {
-        toast(t("المتصفح الحالي لا يدعم تسجيل الصوت أو المتصفح غير آمن (HTTPS).", "Microphone recording is unavailable in this browser context."), "err");
+        toast(t("التسجيل الصوتي غير متاح حالياً.", "Microphone recording is currently unavailable."), "err");
       } else if (msg === "QUOTA_EXCEEDED") {
         toast(t("مساحة التخزين غير كافية لتسجيل الصوت.", "Not enough storage space to record audio."), "err");
       } else {
-        toast(msg, "err");
+        toast(t("تعذر بدء التسجيل الصوتي", "Could not start recording"), "err");
       }
     }
   };
@@ -199,7 +199,7 @@ export function LectureRecorderPanel({ lectureId, subjectId, lectureTitle }: Lec
                 {t("تسجيل غير مكتمل يمكن استعادته", "Interrupted recording can be recovered")}: {rec.title}
               </div>
               <div className="text-xs text-muted">
-                {rec.chunkCount} {t("مقاطع", "chunks")} · {formatBytes(rec.totalBytes)} · {formatDuration(rec.durationMs)}
+                {rec.chunkCount} {t("أجزاء", "parts")} · {formatBytes(rec.totalBytes)} · {formatDuration(rec.durationMs)}
               </div>
             </div>
           </div>
@@ -230,13 +230,13 @@ export function LectureRecorderPanel({ lectureId, subjectId, lectureTitle }: Lec
             <div>
               <h2 className="text-base font-extrabold">{t("مسجل المحاضرة الصوتي", "Lecture Audio Recorder")}</h2>
               <p className="text-xs text-muted">
-                {t("حفظ تدريجي محلي كل 15 ثانية لحماية التسجيلات الطويلة", "Auto-saved in local chunks every 15s for crash safety")}
+                {t("يُحفظ التسجيل تلقائياً أثناء المحاضرة لحماية تسجيلاتك الطويلة", "Automatically saved continuously to protect long lectures")}
               </p>
             </div>
           </div>
 
           {!recorder.micSupported && (
-            <Badge color="#c42a3b">{t("الميكروفون غير متاح في هذا المتصفح", "Mic unavailable")}</Badge>
+            <Badge color="#c42a3b">{t("الميكروفون غير متاح", "Mic unavailable")}</Badge>
           )}
         </div>
 
@@ -283,7 +283,7 @@ export function LectureRecorderPanel({ lectureId, subjectId, lectureTitle }: Lec
                   {formatDuration(recorder.elapsedMs)}
                 </span>
                 <span className="text-xs font-bold text-muted">
-                  {recorder.chunkCount} {t("مقطع محفوظ", "chunks saved")} · {formatBytes(recorder.bytesWritten)}
+                  {recorder.chunkCount} {t("أجزاء محفوظة", "parts saved")} · {formatBytes(recorder.bytesWritten)}
                 </span>
               </div>
 

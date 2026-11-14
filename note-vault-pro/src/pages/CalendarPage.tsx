@@ -53,23 +53,23 @@ export default function CalendarPage() {
       <PageHeader title={t("التقويم الدراسي", "Study calendar")} subtitle={t("المحاضرات ومواعيد المراجعة والامتحانات في مكان واحد", "Lectures, review dates and exams in one place")} actions={<Button variant="primary" onClick={() => setForm({ title: "", date: selected, subjectId: "" })}><Plus size={16} />{t("موعد امتحان", "Add exam")}</Button>} />
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <IconButton label={t("السابق", "Previous")} onClick={() => nav(-1)}><ChevronRight size={18} className="ltr:rotate-180" /></IconButton>
-        <h2 className="min-w-40 text-center text-lg font-extrabold">{title}</h2>
+        <h2 className="min-w-0 flex-1 text-center text-base font-extrabold sm:min-w-40 sm:flex-none sm:text-lg">{title}</h2>
         <IconButton label={t("التالي", "Next")} onClick={() => nav(1)}><ChevronLeft size={18} className="ltr:rotate-180" /></IconButton>
         <Button onClick={() => { setCursor(new Date()); setSelected(todayISO()); }}>{t("اليوم", "Today")}</Button>
-        <div className="ms-auto flex rounded-xl bg-surface2 p-1" role="group" aria-label={t("العرض", "View")}>{(["month", "week", "day"] as View[]).map((v) => <button key={v} aria-pressed={view === v} onClick={() => setView(v)} className={cn("rounded-lg px-3 py-1.5 text-xs font-bold", view === v ? "bg-surface shadow" : "text-muted")}>{v === "month" ? t("شهر", "Month") : v === "week" ? t("أسبوع", "Week") : t("يوم", "Day")}</button>)}</div>
+        <div className="ms-auto flex rounded-xl bg-surface2 p-1" role="group" aria-label={t("العرض", "View")}>{(["month", "week", "day"] as View[]).map((v) => <button key={v} aria-pressed={view === v} onClick={() => setView(v)} className={cn("rounded-lg px-2.5 py-1.5 text-xs font-bold sm:px-3", view === v ? "bg-surface shadow" : "text-muted")}>{v === "month" ? t("شهر", "Month") : v === "week" ? t("أسبوع", "Week") : t("يوم", "Day")}</button>)}</div>
       </div>
       <div className="mb-3 flex flex-wrap gap-3 text-xs font-bold text-muted">{(["lecture", "review", "exam", "note"] as const).map((k) => <span key={k} className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: dotColor({ kind: k } as CalendarItem) }} />{kindLabel[k]}</span>)}</div>
 
       {view !== "day" && (
         <div className="card-surface overflow-hidden">
-          <div className="grid grid-cols-7 border-b border-line bg-surface2 text-center text-xs font-bold text-muted">{names.map((n, i) => <div key={i} className="py-2">{n}</div>)}</div>
+          <div className="grid grid-cols-7 border-b border-line bg-surface2 text-center text-[11px] font-bold text-muted sm:text-xs">{names.map((n, i) => <div key={i} className="min-w-0 truncate px-0.5 py-2">{n}</div>)}</div>
           <div className="grid grid-cols-7">
             {days.map((d) => {
               const k = todayISO(d); const its = byDay.get(k) ?? []; const out = view === "month" && d.getMonth() !== cursor.getMonth();
               return (
                 <button key={k} onClick={() => setSelected(k)} aria-label={`${fmtDate(d.getTime(), { dateStyle: "full" })}, ${its.length}`} aria-pressed={selected === k}
-                  className={cn("min-h-16 border-b border-e border-line p-1.5 text-start align-top transition hover:bg-surface2 sm:min-h-24", out && "opacity-40", selected === k && "bg-accent/10", view === "week" && "min-h-40")}>
-                  <span className={cn("inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold", k === todayISO() && "bg-primary text-primary-fg")}>{d.getDate()}</span>
+                  className={cn("min-h-14 min-w-0 border-b border-e border-line p-1 text-start align-top transition hover:bg-surface2 sm:min-h-24 sm:p-1.5", out && "opacity-40", selected === k && "bg-accent/10", view === "week" && "min-h-36 sm:min-h-40")}>
+                  <span className={cn("inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold sm:text-xs", k === todayISO() && "bg-primary text-primary-fg")}>{d.getDate()}</span>
                   <div className="mt-1 space-y-0.5">{its.slice(0, view === "week" ? 8 : 3).map((i) => <div key={i.id} className="flex items-center gap-1 truncate text-[10px] font-semibold sm:text-[11px]"><span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: dotColor(i) }} /><span className="hidden truncate sm:inline">{i.count ? `${i.count} ${kindLabel[i.kind]}` : i.label}</span></div>)}{its.length > 3 && view === "month" && <div className="text-[10px] text-muted">+{its.length - 3}</div>}</div>
                 </button>
               );

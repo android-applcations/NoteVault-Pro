@@ -71,18 +71,70 @@ html {
   background: var(--bg);
   color: var(--fg);
   -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  touch-action: pan-x pan-y;
+  overscroll-behavior-y: contain;
 }
 body {
   margin: 0;
   min-height: 100dvh;
   background: var(--bg);
   color: var(--fg);
+  overflow-x: clip;
+  touch-action: pan-x pan-y;
+  overscroll-behavior-y: contain;
   transition: background-color 0.25s ease, color 0.25s ease;
 }
 * { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
 :focus-visible { outline: 2.5px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
 button, [role="button"] { cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: 0.5; }
+button, [role="button"], a, summary, label, input, select, textarea,
+header, nav, aside, [role="toolbar"], [role="tablist"], [role="menu"], [role="listbox"] {
+  touch-action: manipulation;
+}
+canvas {
+  touch-action: pan-x pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Prevent iOS/iPadOS auto-zoom when focusing inputs/selects/textareas on touch screens */
+@media (pointer: coarse), (max-width: 1180px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+  select,
+  textarea {
+    font-size: max(16px, 1em);
+  }
+}
+
+/* Balanced text-selection protection: lock UI chrome, controls, and icons; preserve copy/paste inside content */
+header, nav, aside, [role="toolbar"], [role="tablist"], [role="menu"], [role="listbox"],
+button, [role="button"], summary, [role="progressbar"],
+nav a, aside a, .nv-no-select, .nv-no-select * {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+button, [role="button"], a, svg, img:not(.ProseMirror img) {
+  -webkit-user-drag: none;
+}
+svg, img:not(.ProseMirror img) {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+input, textarea,
+.ProseMirror, .ProseMirror *:not(ul[data-type="taskList"] li > label):not(button[data-audio-ts]):not(button[data-audio-ts] *),
+.textLayer, .textLayer *,
+pre, code, .katex, .katex *,
+.nv-selectable, .nv-selectable * {
+  user-select: text;
+  -webkit-user-select: text;
+  -webkit-touch-callout: default;
+}
+
 .reduce-motion *, .reduce-motion *::before, .reduce-motion *::after {
   animation-duration: 0.001ms !important;
   animation-iteration-count: 1 !important;
@@ -92,6 +144,10 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
 .ltr-iso { direction: ltr; unicode-bidi: isolate; text-align: left; }
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
 .safe-top { padding-top: env(safe-area-inset-top); }
+.safe-x {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
 
 .card-surface {
   background: var(--surface);

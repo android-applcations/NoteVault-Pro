@@ -85,7 +85,7 @@ function SubjectCard({ s, onEdit }: { s: Subject; onEdit: (s: Subject) => void }
         <div className="p-4">
           <div className="flex items-center gap-2"><h3 className="truncate text-lg font-extrabold" dir="auto">{s.name}</h3>{s.archived && <Badge>{t("مؤرشفة", "Archived")}</Badge>}</div>
           <p className="truncate text-xs text-muted" dir="auto">{[s.code, s.teacher, semester?.name].filter(Boolean).join(" · ") || "—"}</p>
-          <div className="mt-3 grid grid-cols-4 gap-1 text-center text-xs">
+          <div className="mt-3 grid grid-cols-2 gap-1.5 text-center text-xs min-[360px]:grid-cols-4">
             {[[t("محاضرات", "Lectures"), stats?.lectures], [t("ملاحظات", "Notes"), stats?.notes], [t("ملفات", "Files"), stats?.files], [t("بطاقات", "Cards"), stats?.cards]].map(([l, v]) => (
               <div key={l as string} className="rounded-lg bg-surface2 py-1.5"><div className="text-base font-black">{fmtNum((v as number) ?? 0)}</div><div className="text-muted">{l}</div></div>
             ))}

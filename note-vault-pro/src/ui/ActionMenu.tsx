@@ -27,7 +27,7 @@ export function ActionMenu({ items, label }: { items: MenuItem[]; label?: string
     <div ref={ref} className="relative" onClick={(e) => e.stopPropagation()}>
       <IconButton label={label ?? t("المزيد من الخيارات", "More options")} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)} className="h-9 w-9"><MoreVertical size={18} /></IconButton>
       {open && (
-        <div role="menu" className="absolute end-0 top-full z-50 mt-1 min-w-44 overflow-hidden rounded-2xl border border-line bg-surface p-1 shadow-2xl">
+        <div role="menu" className="absolute end-0 top-full z-50 mt-1 min-w-44 max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-line bg-surface p-1 shadow-2xl">
           {items.map((i) => (
             <button key={i.label} role="menuitem" onClick={() => { setOpen(false); i.onClick(); }}
               className={cn("flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-start text-sm font-semibold hover:bg-surface2", i.danger && "text-danger")}>

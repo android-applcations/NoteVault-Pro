@@ -434,18 +434,19 @@ export default function PdfViewer({
   };
 
   useEffect(() => {
-    const h = () => setFull(!!document.fullscreenElement);
-    document.addEventListener("fullscreenchange", h);
-    return () => document.removeEventListener("fullscreenchange", h);
-  }, []);
-  const toggleFull = async () => {
-    try {
-      if (document.fullscreenElement) await document.exitFullscreen();
-      else await box.current?.requestFullscreen();
-    } catch {
-      toast(t("المتصفح لا يدعم ملء الشاشة", "Fullscreen not supported"), "err");
-    }
-  };
+    if (!full) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setFull(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [full]);
+  const toggleFull = () => setFull((f) => !f);
 
   const terms = useMemo(() => queryTerms(q), [q]);
   const hits = useMemo(() => {
@@ -552,7 +553,7 @@ export default function PdfViewer({
   }
 
   return (
-    <div ref={box} className={cn("flex flex-col bg-bg", full && "h-screen p-2")}>
+    <div ref={box} className={cn("flex flex-col bg-bg", full && "safe-top safe-bottom safe-x fixed inset-0 z-50 p-2 sm:p-3")}>
       <div
         className="mb-2 flex flex-wrap items-center gap-1 rounded-2xl border border-line bg-surface p-1.5"
         role="toolbar"
@@ -689,19 +690,20 @@ export default function PdfViewer({
             <PanelRight size={18} className="rtl:-scale-x-100" />
           </IconButton>
           <IconButton
-            label={full ? t("إنهاء ملء الشاشة", "Exit fullscreen") : t("ملء الشاشة", "Fullscreen")}
-            onClick={() => void toggleFull()}
+            label={full ? t("تصغير العرض", "Exit expanded view") : t("توسيع العرض", "Expand view")}
+            aria-pressed={full}
+            onClick={toggleFull}
           >
             {full ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
           </IconButton>
         </div>
       </div>
 
-      <div className={cn("grid min-h-0 flex-1 gap-3", panel && "lg:grid-cols-[1fr_20rem]")}>
+      <div className={cn("grid min-h-0 flex-1 gap-3", panel && "md:grid-cols-[1fr_18rem] lg:grid-cols-[1fr_20rem]")}>
         <div
           ref={scroller}
           onScroll={onScroll}
-          className={cn("overflow-auto rounded-2xl bg-surface2 p-3", full ? "h-[calc(100vh-4.5rem)]" : "h-[72dvh]")}
+          className={cn("min-w-0 overflow-auto rounded-2xl bg-surface2 p-2 sm:p-3", full ? "min-h-0 flex-1" : "h-[68dvh] md:h-[74dvh]")}
           aria-label={t("صفحات المستند", "Document pages")}
         >
           {!doc ? (
@@ -727,7 +729,7 @@ export default function PdfViewer({
           )}
         </div>
         {panel && (
-          <aside className={cn("overflow-y-auto rounded-2xl border border-line bg-surface p-3", full ? "h-[calc(100vh-4.5rem)]" : "max-h-[72dvh]")}>
+          <aside className={cn("overflow-y-auto rounded-2xl border border-line bg-surface p-3", full ? "max-h-[38dvh] md:max-h-none md:h-full" : "max-h-[55dvh] md:max-h-[74dvh]")}>
             <Tabs
               value={tab}
               onChange={setTab}
@@ -787,7 +789,7 @@ export default function PdfViewer({
                       <button className="mb-1 text-xs font-bold text-accent" onClick={() => goTo(a.page)}>
                         {t("صفحة", "Page")} {a.page}
                       </button>
-                      <p dir="auto" className="whitespace-pre-wrap">
+                      <p dir="auto" className="nv-selectable whitespace-pre-wrap">
                         {a.text}
                       </p>
                       <button className="mt-1 text-xs text-danger" onClick={() => void db.annotations.delete(a.id)}>
@@ -806,7 +808,7 @@ export default function PdfViewer({
                       <button className="mb-1 text-xs font-bold" onClick={() => goTo(h.page)}>
                         {t("صفحة", "Page")} {h.page}
                       </button>
-                      <p dir="auto">{h.text}</p>
+                      <p dir="auto" className="nv-selectable">{h.text}</p>
                       <div className="mt-1 flex gap-3 text-xs">
                         <button
                           className="font-bold text-accent"
