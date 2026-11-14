@@ -267,8 +267,8 @@ export function AudioPlayer({
                   void handleAddMarker();
                 }
               }}
-              placeholder={t("علامة مرجعية عند الموضع الحالي…", "Bookmark note at current time…")}
-              className="h-9 flex-1 text-xs"
+              placeholder={t("علامة مرجعية…", "Bookmark note…")}
+              className="h-9 min-w-0 flex-1 basis-40 text-xs"
             />
             <Button
               className="h-9 px-3 text-xs"

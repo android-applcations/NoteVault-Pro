@@ -82,12 +82,12 @@ export function EmptyState({ icon, title, hint, action }: { icon: ReactNode; tit
 export function PageHeader({ title, subtitle, actions, back }: { title: ReactNode; subtitle?: ReactNode; actions?: ReactNode; back?: ReactNode }) {
   return (
     <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         {back}
-        <h1 className="truncate text-2xl font-extrabold tracking-tight sm:text-3xl">{title}</h1>
+        <h1 className="break-words text-xl font-extrabold tracking-tight sm:text-3xl">{title}</h1>
         {subtitle && <p className="mt-1 text-sm text-muted">{subtitle}</p>}
       </div>
-      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+      {actions && <div className="flex max-w-full flex-wrap items-center gap-2">{actions}</div>}
     </div>
   );
 }
@@ -132,18 +132,19 @@ export function Modal({ open, onClose, title, children, footer, wide }: { open: 
   return (
     <AnimatePresence>
       {open && (
-        <motion.div key="nv-modal-backdrop" className="fixed inset-0 z-[80] flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(e) => e.target === e.currentTarget && onCloseRef.current()}>
+        <motion.div key="nv-modal-backdrop" className="safe-x fixed inset-0 z-[80] flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-6" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(e) => e.target === e.currentTarget && onCloseRef.current()}>
           <motion.div
             ref={ref} role="dialog" aria-modal="true" aria-labelledby={titleId}
-            className={cn("flex max-h-[92dvh] w-full flex-col rounded-t-3xl bg-surface shadow-2xl sm:rounded-3xl", wide ? "sm:max-w-3xl" : "sm:max-w-lg")}
+            className={cn("flex max-h-[90dvh] w-full flex-col rounded-t-3xl bg-surface shadow-2xl sm:max-h-[86dvh] sm:rounded-3xl", wide ? "sm:max-w-2xl lg:max-w-3xl" : "sm:max-w-lg")}
             initial={{ y: 40, opacity: 0, scale: 0.98 }} animate={{ y: 0, opacity: 1, scale: 1 }} exit={{ y: 30, opacity: 0 }} transition={{ type: "spring", damping: 28, stiffness: 320 }}
           >
-            <div className="flex items-center justify-between gap-2 border-b border-line px-5 py-3.5">
-              <h2 id={titleId} className="text-lg font-extrabold">{title}</h2>
+            <div className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-line sm:hidden" aria-hidden />
+            <div className="flex items-center justify-between gap-2 border-b border-line px-4 py-3 sm:px-5 sm:py-3.5">
+              <h2 id={titleId} className="min-w-0 truncate text-base font-extrabold sm:text-lg">{title}</h2>
               <IconButton label={t("إغلاق", "Close")} onClick={() => onCloseRef.current()}><X size={18} /></IconButton>
             </div>
-            <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
-            {footer && <div className="flex flex-wrap justify-end gap-2 border-t border-line px-5 py-3 safe-bottom">{footer}</div>}
+            <div className="flex-1 overflow-y-auto px-4 py-3.5 sm:px-5 sm:py-4">{children}</div>
+            {footer && <div className="safe-bottom flex flex-wrap justify-end gap-2 border-t border-line px-4 py-3 sm:px-5">{footer}</div>}
           </motion.div>
         </motion.div>
       )}

@@ -50,7 +50,7 @@ export function probeSupportedRecordingMime(): RecordingMimeChoice {
 }
 
 export async function startRecordingSessionRecord(input: {
-  lectureId: string;
+  lectureId?: string;
   subjectId?: string;
   noteId?: string;
   title: string;
@@ -62,9 +62,9 @@ export async function startRecordingSessionRecord(input: {
   const cleanTitle = input.title.trim().slice(0, 200) || `Lecture Recording ${new Date(now).toLocaleTimeString()}`;
   const rec: LectureRecording = {
     id: uid(),
-    lectureId: input.lectureId,
-    subjectId: input.subjectId,
-    noteId: input.noteId,
+    lectureId: input.lectureId || undefined,
+    subjectId: input.subjectId || undefined,
+    noteId: input.noteId || undefined,
     title: cleanTitle,
     mime: input.mime,
     ext: input.ext,

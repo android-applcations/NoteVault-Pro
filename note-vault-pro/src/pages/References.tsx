@@ -80,9 +80,9 @@ export default function References() {
                     <Button variant="ghost" className="!px-2" aria-label={t("نسخ الاقتباس", "Copy citation")} onClick={async () => (await copy(citationToPlain(parts))) ? toast(t("تم النسخ", "Copied")) : toast(t("تعذر النسخ", "Copy failed"), "err")}><Copy size={15} /></Button>
                     <Button variant="ghost" className="!px-2" aria-label={t("تعديل", "Edit")} onClick={() => { const { id, createdAt, updatedAt, ...data } = r; void createdAt; void updatedAt; setForm({ id, data }); }}><Pencil size={15} /></Button>
                     <Button variant="ghost" className="!px-2" aria-label={t("حذف", "Delete")} onClick={async () => { if (await confirm({ title: t("حذف المرجع؟", "Delete this reference?"), danger: true })) await deleteReference(r.id); }}><Trash2 size={15} className="text-danger" /></Button></div></div>
-                <p className="ltr-iso text-sm leading-7" dir="ltr" lang="en">{parts.map((p, i) => (p.italic ? <i key={i}>{p.text}</i> : <span key={i}>{p.text}</span>))}</p>
+                <p className="nv-selectable ltr-iso text-sm leading-7" dir="ltr" lang="en">{parts.map((p, i) => (p.italic ? <i key={i}>{p.text}</i> : <span key={i}>{p.text}</span>))}</p>
                 {url && <a href={url} target="_blank" rel="noopener noreferrer nofollow" className="mt-1 inline-block text-xs font-bold text-accent hover:underline">{t("فتح المصدر", "Open source")} ↗</a>}
-                {r.notes && <p className="mt-2 rounded-xl bg-surface2 p-2 text-sm text-muted" dir="auto">{r.notes}</p>}
+                {r.notes && <p className="nv-selectable mt-2 rounded-xl bg-surface2 p-2 text-sm text-muted" dir="auto">{r.notes}</p>}
               </li>
             );
           })}

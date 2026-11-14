@@ -58,7 +58,7 @@ export default function SearchPage() {
   };
   return (
     <div>
-      <PageHeader title={t("البحث الشامل", "Universal search")} subtitle={t("يبحث في المواد والمحاضرات والملاحظات والملفات ونصوص PDF والبطاقات — دون اتصال", "Searches subjects, lectures, notes, files, PDF text and cards — offline")} />
+      <PageHeader title={t("البحث الشامل", "Universal search")} subtitle={t("ابحث في المواد والمحاضرات والملاحظات والملفات والبطاقات", "Search subjects, lectures, notes, files and cards")} />
       <div className="relative">
         <Search size={18} className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-muted" />
         <Input autoFocus value={q} aria-label={t("كلمة البحث", "Search query")} placeholder={t('اكتب كلمة أو "عبارة بين علامتين"…', 'Type a word or "an exact phrase"…')} className="!h-12 ps-10 text-base" dir="auto"
@@ -68,9 +68,9 @@ export default function SearchPage() {
       {suggestions.length > 0 && <div className="mt-2 flex flex-wrap gap-1.5">{suggestions.map((s) => <Chip key={s} onClick={() => { const parts = q.split(/\s+/); parts[parts.length - 1] = s; setQ(parts.join(" ")); }}>{s}</Chip>)}</div>}
       <div className="my-4 flex flex-wrap items-center gap-2">
         {(Object.keys(labels) as SearchKind[]).map((k) => <Chip key={k} active={kinds.includes(k)} onClick={() => toggleKind(k)}>{labels[k]}</Chip>)}
-        <div className="ms-auto flex gap-2">
-          <div className="w-40"><Select aria-label={t("المادة", "Subject")} value={subjectId} onChange={(e) => setSubjectId(e.target.value)}><option value="">{t("كل المواد", "All subjects")}</option>{subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</Select></div>
-          <div className="w-36"><Select aria-label={t("التاريخ", "Date")} value={range} onChange={(e) => setRange(e.target.value)}><option value="all">{t("أي تاريخ", "Any date")}</option><option value="week">{t("آخر 7 أيام", "Last 7 days")}</option><option value="month">{t("آخر 30 يوماً", "Last 30 days")}</option><option value="year">{t("آخر سنة", "Last year")}</option></Select></div>
+        <div className="flex w-full flex-wrap gap-2 sm:ms-auto sm:w-auto">
+          <div className="min-w-0 flex-1 sm:w-40 sm:flex-none"><Select aria-label={t("المادة", "Subject")} value={subjectId} onChange={(e) => setSubjectId(e.target.value)}><option value="">{t("كل المواد", "All subjects")}</option>{subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</Select></div>
+          <div className="min-w-0 flex-1 sm:w-36 sm:flex-none"><Select aria-label={t("التاريخ", "Date")} value={range} onChange={(e) => setRange(e.target.value)}><option value="all">{t("أي تاريخ", "Any date")}</option><option value="week">{t("آخر 7 أيام", "Last 7 days")}</option><option value="month">{t("آخر 30 يوماً", "Last 30 days")}</option><option value="year">{t("آخر سنة", "Last year")}</option></Select></div>
         </div>
       </div>
       {hits === null ? (

@@ -64,8 +64,8 @@ test("Phase 8: KaTeX formulas in flashcards & editor, coordinate PDF highlights,
   await page.getByRole("button", { name: /Blank note/ }).click();
   await expect(page.locator(".ProseMirror")).toBeVisible({ timeout: 10000 });
 
-  await page.getByRole("button", { name: "Math formula (LaTeX)" }).click();
-  await page.getByLabel("LaTeX expression").fill("\\int_{0}^{1} x^2\\,dx");
+  await page.getByRole("button", { name: "Math formula" }).click();
+  await page.getByLabel("Formula expression").fill("\\int_{0}^{1} x^2\\,dx");
   await expect(page.locator("[role='dialog'] .katex").first()).toBeVisible();
   await page.getByRole("button", { name: "Insert", exact: true }).click();
   await expect(page.locator(".ProseMirror span[data-formula]")).toContainText("\\int_{0}^{1}");
@@ -128,9 +128,9 @@ test("Phase 8: KaTeX formulas in flashcards & editor, coordinate PDF highlights,
     buffer: Buffer.from(pngBytes),
   });
   await page.getByRole("button", { name: "ocr-sample.png" }).first().click();
-  await expect(page.getByLabel("OCR language")).toBeVisible({ timeout: 10000 });
-  await page.getByLabel("OCR language").selectOption("eng");
-  await page.getByRole("button", { name: "Extract text (OCR)" }).click();
+  await expect(page.getByLabel("Text language")).toBeVisible({ timeout: 10000 });
+  await page.getByLabel("Text language").selectOption("eng");
+  await page.getByRole("button", { name: "Extract text" }).click();
 
   const ocrArea = page.locator("textarea").first();
   await expect(ocrArea).toBeVisible({ timeout: 45000 });

@@ -194,7 +194,7 @@ class LectureRecorderController {
 
   async start(opts: {
     subjectId?: string;
-    lectureId: string;
+    lectureId?: string;
     title: string;
     timesliceMs?: number;
   }): Promise<string> {
@@ -211,7 +211,7 @@ class LectureRecorderController {
     this.update({
       phase: "requesting_mic",
       subjectId: opts.subjectId ?? null,
-      lectureId: opts.lectureId,
+      lectureId: opts.lectureId || null,
       title: opts.title,
       mime: choice.baseMime,
       elapsedMs: 0,
@@ -234,7 +234,7 @@ class LectureRecorderController {
       const deviceLabel = stream.getAudioTracks()[0]?.label;
       const session = await startRecordingSessionRecord({
         subjectId: opts.subjectId,
-        lectureId: opts.lectureId,
+        lectureId: opts.lectureId || undefined,
         title: opts.title,
         mime: choice.baseMime,
         ext: choice.ext,

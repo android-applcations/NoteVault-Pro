@@ -49,7 +49,7 @@ export function CardView({ card, revealed }: { card: Flashcard; revealed: boolea
   }
   const src = card.source;
   return (
-    <div className="space-y-4 text-center">
+    <div className="nv-selectable space-y-4 text-center">
       {card.imageId && <CardImage id={card.imageId} />}
       {front}
       {revealed && <div className="mx-auto h-px w-24 bg-line" />}

@@ -85,9 +85,12 @@ test("PWA manifest, icons, CSP (no inline script errors), and full offline route
     await expect(page.getByRole("heading").first()).toBeVisible();
   }
 
-  // Verify settings install guidance renders cleanly
+  // Verify Settings renders cleanly without removed Install/Privacy educational sections
   await page.goto("/#/settings");
-  await expect(page.getByRole("heading", { name: "Install on your device" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Appearance & language" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Backup & restore" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Install on your device" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Privacy" })).toHaveCount(0);
 
   const recordedCsp = await page.evaluate(() => (window as unknown as { __cspViolations?: string[] }).__cspViolations ?? []);
   cspViolations.push(...recordedCsp);
@@ -96,10 +99,10 @@ test("PWA manifest, icons, CSP (no inline script errors), and full offline route
   expect(pageErrors).toEqual([]);
 });
 
-test("Install guidance on Android and iOS & strict script-src CSP", async ({ browser }) => {
-  for (const [label, ua, expected] of [
-    ["android", "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/130.0.0.0 Mobile Safari/537.36", /On Android \(Chrome\)/],
-    ["ios", "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 Version/17.5 Mobile/15E148 Safari/604.1", /On iPhone\/iPad \(Safari\)/],
+test("Viewport mobile safeguards, standalone manifest, and strict script-src CSP on Android and iOS", async ({ browser }) => {
+  for (const [label, ua] of [
+    ["android", "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/130.0.0.0 Mobile Safari/537.36"],
+    ["ios", "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 Version/17.5 Mobile/15E148 Safari/604.1"],
   ] as const) {
     const ctx = await browser.newContext({ userAgent: ua });
     const page = await ctx.newPage();
@@ -107,7 +110,12 @@ test("Install guidance on Android and iOS & strict script-src CSP", async ({ bro
       localStorage.setItem("nv-prefs", JSON.stringify({ lang: "en", theme: "light" }));
     });
     await page.goto("/#/settings");
-    await expect(page.getByText(expected), `Install guidance for ${label}`).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Settings" }), `Settings heading for ${label}`).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Install on your device" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Privacy" })).toHaveCount(0);
+    const viewport = await page.locator('meta[name="viewport"]').getAttribute("content");
+    expect(viewport).toContain("viewport-fit=cover");
+    expect(viewport).toContain("user-scalable=no");
     const csp = await page.locator('meta[http-equiv="Content-Security-Policy"]').getAttribute("content");
     expect(csp).toContain("script-src 'self'");
     expect(csp).not.toMatch(/script-src[^;]*'unsafe-inline'/);

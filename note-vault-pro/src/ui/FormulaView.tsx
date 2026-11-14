@@ -42,7 +42,11 @@ export function FormulaView({
     <span
       ref={ref}
       dir="ltr"
-      className={cn(displayMode ? "block overflow-x-auto py-1 text-center" : "inline-block align-middle", className)}
+      className={cn(
+        "nv-selectable",
+        displayMode ? "block max-w-full overflow-x-auto py-1 text-center" : "inline-block align-middle",
+        className
+      )}
     />
   );
 }

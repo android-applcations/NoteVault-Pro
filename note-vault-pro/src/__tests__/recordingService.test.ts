@@ -353,4 +353,37 @@ describe("Lecture recording engine, recovery, markers, transcripts & note integr
     const note = await createNote({ title: "Temp Note", subjectId: subj.id });
     expect(note.id).toBeTruthy();
   });
+
+  it("persists standalone recordings (without lectureId) through finalization and backup roundtrip", async () => {
+    const rec = await startRecordingSessionRecord({
+      title: "Standalone Physics Lecture",
+      mime: "audio/webm",
+      ext: "webm",
+    });
+    expect(rec.lectureId).toBeUndefined();
+
+    await appendRecordingChunk({
+      recordingId: rec.id,
+      seq: 0,
+      blob: fakeWebmChunk(0x91),
+      mime: "audio/webm",
+      durationMs: 2500,
+      startMs: 0,
+      endMs: 2500,
+    });
+
+    const finalized = await finalizeRecordingSession(rec.id, 2500);
+    expect(finalized.recording.status).toBe("ready");
+    expect(finalized.recording.lectureId).toBeUndefined();
+    expect(finalized.attachment.lectureId).toBeUndefined();
+
+    const archive = await exportBackup();
+    const parsed = await parseBackup(new Uint8Array(await archive.arrayBuffer()));
+    for (const t of db.tables) await t.clear();
+    await applyBackup(parsed, "replace");
+
+    const restored = await db.recordings.get(rec.id);
+    expect(restored?.title).toBe("Standalone Physics Lecture");
+    expect(restored?.lectureId).toBeUndefined();
+  });
 });

@@ -7,7 +7,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { asrClient, type AsrJobProgress } from "@/asr/asrClient";
-import { ASR_CATALOG, modelSupportsLanguage } from "@/asr/models";
+import { modelSupportsLanguage } from "@/asr/models";
 import { db } from "@/data/db";
 import type { AsrModelRecord, LectureRecording, Note, TranscriptSegment } from "@/data/types";
 import { formatDuration } from "@/domain/text";
@@ -115,7 +115,7 @@ export function TranscriptPanel({ recording, currentTimeMs, onSeekMs }: Transcri
   const handleStart = async (resume = false) => {
     if (!selectedModel) return;
     if (!langSupported) {
-      toast(t("النموذج المختار لا يدعم هذه اللغة", "Selected model does not support this language"), "err");
+      toast(t("حزمة اللغة المختارة لا تدعم هذه اللغة", "Selected language pack does not support this language"), "err");
       return;
     }
     try {
@@ -125,15 +125,15 @@ export function TranscriptPanel({ recording, currentTimeMs, onSeekMs }: Transcri
         language: asrLang,
         resume,
       });
-      toast(t("تم التفريغ النصي بنجاح", "Transcription completed"));
+      toast(t("تم التفريغ الصوتي بنجاح", "Transcription completed"));
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (msg === "TRANSCRIPTION_CANCELLED") {
         toast(t("تم إلغاء التفريغ", "Transcription cancelled"), "info");
       } else if (msg === "MODEL_INTEGRITY_FAILED") {
-        toast(t("فشل التحقق من سلامة ملفات النموذج، أعد تنزيله من الإعدادات", "Model integrity verification failed. Re-download it in Settings."), "err");
+        toast(t("حزمة اللغة بحاجة لإعادة تنزيل من الإعدادات.", "Language pack needs to be re-downloaded in Settings."), "err");
       } else {
-        toast(msg, "err");
+        toast(t("تعذر إتمام التفريغ الصوتي", "Could not complete transcription"), "err");
       }
     }
   };
@@ -195,7 +195,7 @@ export function TranscriptPanel({ recording, currentTimeMs, onSeekMs }: Transcri
 
   const handleRetranscribeSegment = async (seg: TranscriptSegment) => {
     if (!selectedModel || !langSupported) {
-      toast(t("اختر نموذجًا داعمًا للغة أولاً", "Select a compatible model first"), "err");
+      toast(t("اختر حزمة لغة متوافقة أولاً", "Select a compatible language pack first"), "err");
       return;
     }
     setBusySegId(seg.id);
@@ -206,8 +206,8 @@ export function TranscriptPanel({ recording, currentTimeMs, onSeekMs }: Transcri
         language: asrLang,
       });
       toast(t("تمت إعادة تفريغ المقطع", "Segment re-transcribed"));
-    } catch (e) {
-      toast(e instanceof Error ? e.message : t("تعذر إعادة التفريغ", "Re-transcription failed"), "err");
+    } catch {
+      toast(t("تعذر إعادة التفريغ", "Could not re-transcribe segment"), "err");
     } finally {
       setBusySegId(null);
     }
@@ -216,11 +216,11 @@ export function TranscriptPanel({ recording, currentTimeMs, onSeekMs }: Transcri
   const baseName = (recording.title || "transcript").replace(/[^\p{L}\p{N}_-]+/gu, "_").slice(0, 60);
 
   return (
-    <div className="space-y-4 rounded-2xl border border-line bg-surface p-4">
+    <div className="space-y-4 rounded-2xl border border-line bg-surface p-3.5 sm:p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Sparkles size={18} className="text-accent" />
-          <h3 className="text-base font-extrabold">{t("التفريغ النصي المحلي (بدون إنترنت)", "Offline Transcription")}</h3>
+          <h3 className="text-base font-extrabold">{t("التفريغ الصوتي", "Transcription")}</h3>
           {segments.length > 0 && (
             <Badge color="#0b8579">{segments.length} {t("مقطع", "segments")}</Badge>
           )}
@@ -270,7 +270,7 @@ export function TranscriptPanel({ recording, currentTimeMs, onSeekMs }: Transcri
         )}
       </div>
 
-      {/* Model availability / controls */}
+      {/* Language pack availability / controls */}
       {readyModels.length === 0 ? (
         <div className="rounded-xl border border-warn/40 bg-warn/10 p-3.5 text-sm">
           <div className="flex items-start gap-2.5">
@@ -278,23 +278,20 @@ export function TranscriptPanel({ recording, currentTimeMs, onSeekMs }: Transcri
             <div className="space-y-2">
               <div className="font-bold">
                 {t(
-                  "لا يوجد نموذج تفريغ صوتي مثبت محليًا بعد",
-                  "No offline speech model installed yet"
+                  "التفريغ الصوتي غير جاهز بعد",
+                  "Transcription is not ready yet"
                 )}
               </div>
               <p className="text-xs text-muted">
                 {t(
-                  "يعمل التفريغ النصي داخل متصفحك بالكامل دون إرسال الصوت لأي خادم. نزّل نموذج Whisper مرة واحدة من الإعدادات (~41–78 MB) أو استورد حزمة نموذج محلية.",
-                  "Transcription runs 100% locally in your browser without uploading audio anywhere. Download a Whisper model once from Settings (~41–78 MB) or import a local model pack."
+                  "التفريغ الصوتي غير جاهز بعد. يمكنك تفعيل الميزة وتنزيل حزمة اللغة من الإعدادات.",
+                  "Transcription is not ready yet. You can enable it and download a language pack from Settings."
                 )}
               </p>
               <div className="flex flex-wrap items-center gap-2 pt-1">
                 <Button variant="primary" className="h-9 text-xs" onClick={() => nav("/settings")}>
-                  {t("إدارة نماذج التفريغ في الإعدادات", "Open Speech Models in Settings")}
+                  {t("تفعيل التفريغ الصوتي", "Enable in Settings")}
                 </Button>
-                <span className="text-xs text-muted">
-                  ({ASR_CATALOG.map((c) => c.id).join(" · ")})
-                </span>
               </div>
             </div>
           </div>
@@ -302,8 +299,8 @@ export function TranscriptPanel({ recording, currentTimeMs, onSeekMs }: Transcri
       ) : (
         <div className="space-y-3">
           <div className="flex flex-wrap items-end gap-2">
-            <div className="min-w-[200px] flex-1">
-              <label className="mb-1 block text-xs font-bold text-muted">{t("النموذج المحلي", "Local model")}</label>
+            <div className="min-w-0 flex-1 basis-44">
+              <label className="mb-1 block text-xs font-bold text-muted">{t("حزمة اللغة", "Language pack")}</label>
               <Select value={selectedModelId} onChange={(e) => setSelectedModelId(e.target.value)} disabled={isRunning}>
                 {readyModels.map((m) => (
                   <option key={m.id} value={m.id}>
@@ -313,7 +310,7 @@ export function TranscriptPanel({ recording, currentTimeMs, onSeekMs }: Transcri
               </Select>
             </div>
 
-            <div className="w-44">
+            <div className="w-full sm:w-44">
               <label className="mb-1 flex items-center gap-1 text-xs font-bold text-muted">
                 <Languages size={12} /> {t("اللغة", "Language")}
               </label>
@@ -325,7 +322,7 @@ export function TranscriptPanel({ recording, currentTimeMs, onSeekMs }: Transcri
             </div>
 
             {!isRunning ? (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 {recording.transcriptionStatus === "paused" && (
                   <Button variant="primary" disabled={!langSupported} onClick={() => void handleStart(true)}>
                     <Play size={15} /> {t("استئناف التفريغ", "Resume")}
@@ -337,7 +334,7 @@ export function TranscriptPanel({ recording, currentTimeMs, onSeekMs }: Transcri
                   onClick={() => void handleStart(false)}
                 >
                   <Sparkles size={15} />{" "}
-                  {segments.length > 0 ? t("إعادة التفريغ", "Re-transcribe") : t("بدء التفريغ النصي", "Transcribe offline")}
+                  {segments.length > 0 ? t("إعادة التفريغ", "Re-transcribe") : t("بدء التفريغ", "Transcribe")}
                 </Button>
               </div>
             ) : (
@@ -354,11 +351,13 @@ export function TranscriptPanel({ recording, currentTimeMs, onSeekMs }: Transcri
 
           {!langSupported && selectedModel && (
             <div className="flex items-center gap-2 rounded-xl border border-danger/35 bg-danger/10 px-3 py-2 text-xs font-bold text-danger">
-              <AlertTriangle size={14} />
-              {t(
-                `النموذج "${selectedModel.name}" يدعم (${selectedModel.languages.join(", ")}) فقط ولا يدعم العربية أو الكشف التلقائي. ثبّت نموذج whisper-tiny أو whisper-base متعدد اللغات.`,
-                `Model "${selectedModel.name}" only supports (${selectedModel.languages.join(", ")}) and does not support Arabic or auto-detect. Install whisper-tiny or whisper-base.`
-              )}
+              <AlertTriangle size={14} className="shrink-0" />
+              <span>
+                {t(
+                  `الحزمة "${selectedModel.name}" تدعم الإنجليزية فقط. ثبّت الحزمة متعددة اللغات من الإعدادات لدعم العربية.`,
+                  `"${selectedModel.name}" only supports English. Install a multilingual pack from Settings for Arabic.`
+                )}
+              </span>
             </div>
           )}
 
@@ -368,10 +367,10 @@ export function TranscriptPanel({ recording, currentTimeMs, onSeekMs }: Transcri
                 <span className="flex items-center gap-1.5">
                   <Loader2 size={14} className="animate-spin text-accent" />
                   {jobProgress?.phase === "loading_model"
-                    ? t("جاري تحميل النموذج والتحقق من SHA-256…", "Loading & SHA-256 verifying model…")
+                    ? t("جارٍ تجهيز حزمة التفريغ…", "Preparing language pack…")
                     : jobProgress?.phase === "decoding"
-                      ? t("جاري تجهيز الصوت (16kHz PCM)…", "Decoding audio (16kHz PCM)…")
-                      : t("جاري التفريغ النصي محليًا…", "Transcribing locally…")}
+                      ? t("جارٍ معالجة الصوت…", "Processing audio…")
+                      : t("جارٍ التفريغ الصوتي…", "Transcribing…")}
                 </span>
                 <span className="font-mono tabular-nums">
                   {Math.round((jobProgress?.progress ?? recording.transcriptionProgress ?? 0) * 100)}%
@@ -391,7 +390,7 @@ export function TranscriptPanel({ recording, currentTimeMs, onSeekMs }: Transcri
       {/* Target note + transcript search + insert all */}
       {segments.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 border-t border-line pt-3">
-          <div className="relative min-w-[180px] flex-1">
+          <div className="relative min-w-0 flex-1 basis-40">
             <Search size={14} className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-muted" />
             <Input
               value={filterText}
@@ -405,7 +404,7 @@ export function TranscriptPanel({ recording, currentTimeMs, onSeekMs }: Transcri
             <Select
               value={targetNoteId}
               onChange={(e) => setTargetNoteId(e.target.value)}
-              className="h-9 w-48 text-xs"
+              className="h-9 w-full text-xs sm:w-48"
               aria-label={t("الملاحظة المستهدفة", "Target note")}
             >
               {lectureNotes.map((n) => (
@@ -531,7 +530,7 @@ export function TranscriptPanel({ recording, currentTimeMs, onSeekMs }: Transcri
                       setEditValue(seg.text);
                     }}
                     title={t("انقر لتعديل النص", "Click to edit text")}
-                    className="mt-2 cursor-text whitespace-pre-wrap text-sm leading-relaxed"
+                    className="nv-selectable mt-2 cursor-text whitespace-pre-wrap text-sm leading-relaxed"
                   >
                     {seg.text}
                   </p>

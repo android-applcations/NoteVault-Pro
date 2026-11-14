@@ -103,7 +103,7 @@ export function AttachmentEditModal({ att, onClose }: { att: Attachment | null; 
     if (!linkTarget) return;
     try {
       await linkAttachment(att.id, linkKind === "note" ? { noteId: linkTarget } : { lectureId: linkTarget });
-      toast(t("تم الربط دون تكرار تخزين الملف", "Linked without duplicating the stored file"));
+      toast(t("تم الربط بنجاح", "Linked successfully"));
     } catch { toast(t("تعذر الربط", "Could not link"), "err"); }
   };
   return (
@@ -117,7 +117,7 @@ export function AttachmentEditModal({ att, onClose }: { att: Attachment | null; 
           <Field label={t("المحاضرة", "Lecture")}>{(id) => <Select id={id} value={lectureId} onChange={(e) => setLectureId(e.target.value)} disabled={!subjectId}><option value="">—</option>{lectures.map((l) => <option key={l.id} value={l.id}>{l.title}</option>)}</Select>}</Field>
         </div>
         <div className="rounded-2xl border border-line p-3">
-          <div className="mb-2 flex items-center gap-2 text-sm font-bold"><Link2 size={15} />{t("ربط بملاحظة أو محاضرة أخرى (دون تكرار التخزين)", "Link to another note or lecture (no duplicate storage)")}</div>
+          <div className="mb-2 flex items-center gap-2 text-sm font-bold"><Link2 size={15} />{t("ربط بملاحظة أو محاضرة أخرى", "Link to another note or lecture")}</div>
           <div className="grid gap-2 sm:grid-cols-[8rem_1fr_auto]">
             <Select aria-label={t("نوع الهدف", "Target type")} value={linkKind} onChange={(e) => { setLinkKind(e.target.value as "lecture" | "note"); setLinkTarget(""); }}><option value="note">{t("ملاحظة", "Note")}</option><option value="lecture">{t("محاضرة", "Lecture")}</option></Select>
             <Select aria-label={t("الهدف", "Target")} value={linkTarget} onChange={(e) => setLinkTarget(e.target.value)}>

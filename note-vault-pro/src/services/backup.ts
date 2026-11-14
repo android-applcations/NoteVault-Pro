@@ -412,7 +412,7 @@ const RELATIONS: [TableName, string, TableName, boolean][] = [
   ["noteTags", "noteId", "notes", true],
   ["noteTags", "tagId", "tags", true],
   ["events", "subjectId", "subjects", false],
-  ["recordings", "lectureId", "lectures", true],
+  ["recordings", "lectureId", "lectures", false],
   ["recordings", "subjectId", "subjects", false],
   ["recordings", "attachmentId", "attachments", false],
   ["recordings", "noteId", "notes", false],

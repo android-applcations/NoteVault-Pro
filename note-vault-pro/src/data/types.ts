@@ -287,7 +287,7 @@ export type TranscriptionStatus = "idle" | "queued" | "transcribing" | "paused" 
 
 export interface LectureRecording extends Base, Trashable {
   subjectId?: ID;
-  lectureId: ID;
+  lectureId?: ID;
   attachmentId?: ID;
   noteId?: ID;
   title: string;

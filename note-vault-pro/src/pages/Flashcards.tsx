@@ -54,7 +54,7 @@ export default function Flashcards() {
 
   return (
     <div>
-      <PageHeader title={t("استوديو البطاقات", "Flashcards studio")} subtitle={t("مراجعة متباعدة بخوارزمية FSRS تعمل دون اتصال", "Spaced repetition with the FSRS algorithm — works offline")}
+      <PageHeader title={t("استوديو البطاقات", "Flashcards studio")} subtitle={t("مراجعة ذكية متباعدة لحفظ أسرع دون اتصال", "Smart spaced repetition for faster study — works offline")}
         actions={<><Button onClick={() => setDeckModal({ name: "", subjectId: "" })}><Plus size={16} />{t("مجموعة", "Deck")}</Button><Button variant="primary" onClick={() => openCard()}><Plus size={16} />{t("بطاقة", "Card")}</Button></>} />
       <Tabs value={tab} onChange={setTab} items={[{ id: "review", label: t("المراجعة", "Review"), badge: due }, { id: "cards", label: t("البطاقات", "Cards"), badge: cards?.length }, { id: "decks", label: t("المجموعات", "Decks"), badge: decks.length }, { id: "stats", label: t("الإحصائيات", "Statistics") }]} />
 
@@ -75,7 +75,7 @@ export default function Flashcards() {
               <Select aria-label={t("الفصل", "Semester")} value={sem} onChange={(e) => setSem(e.target.value)}><option value="">—</option>{semesters.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</Select>
               <Button className="w-full" disabled={!sem} onClick={() => startReview({ semester: sem })}>{t("ابدأ", "Start")}</Button></div>
             <div className="card-surface space-y-2 p-4"><h3 className="flex items-center gap-2 font-extrabold"><Settings2 size={15} />{t("جلسة مخصصة", "Custom session")}</h3>
-              <div className="grid grid-cols-2 gap-2"><Select aria-label={t("المجموعة", "Deck")} value={deckFilter} onChange={(e) => setDeckFilter(e.target.value)}><option value="">{t("كل المجموعات", "All decks")}</option>{decks.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</Select>
+              <div className="grid grid-cols-1 gap-2 min-[360px]:grid-cols-2"><Select aria-label={t("المجموعة", "Deck")} value={deckFilter} onChange={(e) => setDeckFilter(e.target.value)}><option value="">{t("كل المجموعات", "All decks")}</option>{decks.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</Select>
                 <Input aria-label={t("عدد البطاقات", "Number of cards")} type="number" min={1} max={500} value={custom} onChange={(e) => setCustom(Number(e.target.value))} /></div>
               <Button className="w-full" onClick={() => startReview({ deck: deckFilter, limit: custom })} disabled={!due}>{t("ابدأ", "Start")}</Button></div>
           </div>

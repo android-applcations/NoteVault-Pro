@@ -420,7 +420,7 @@ export async function ensureRecordingForAudioAttachment(attachmentId: string): P
   await db.recordings.put({
     id,
     attachmentId: att.id,
-    lectureId: att.lectureId ?? "",
+    lectureId: att.lectureId || undefined,
     subjectId: att.subjectId,
     noteId: att.noteId,
     title: att.name,

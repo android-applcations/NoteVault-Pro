@@ -28,6 +28,7 @@ const CalendarPage = lazy(() => import("@/pages/CalendarPage"));
 const Trash = lazy(() => import("@/pages/Trash"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const More = lazy(() => import("@/pages/More"));
+const RecordLecture = lazy(() => import("@/pages/RecordLecture"));
 
 function Loading() {
   return (
@@ -43,6 +44,9 @@ function Boot() {
   const { t, prefs } = useI18n();
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   useEffect(() => {
+    const preventPinch = (e: Event) => e.preventDefault();
+    document.addEventListener("gesturestart", preventPinch, { passive: false });
+    document.addEventListener("gesturechange", preventPinch, { passive: false });
     db.open()
       .then(async () => {
         try {
@@ -54,13 +58,17 @@ function Boot() {
         setState("ready");
       })
       .catch(() => setState("error"));
+    return () => {
+      document.removeEventListener("gesturestart", preventPinch);
+      document.removeEventListener("gesturechange", preventPinch);
+    };
   }, []);
   if (state === "error")
     return (
       <div className="grid min-h-dvh place-items-center p-6 text-center">
         <div className="card-surface max-w-md p-8">
-          <h1 className="mb-2 text-xl font-extrabold">{t("تعذر فتح قاعدة البيانات المحلية", "Could not open the local database")}</h1>
-          <p className="text-sm text-muted">{t("قد يكون التخزين معطلاً (الوضع الخاص) أو أن بياناتك أحدث من هذه النسخة من التطبيق. حدّث الصفحة أو حدّث التطبيق.", "Storage may be disabled (private mode) or your data is newer than this app version. Reload or update the app.")}</p>
+          <h1 className="mb-2 text-xl font-extrabold">{t("تعذر فتح بيانات التطبيق", "Could not open app data")}</h1>
+          <p className="text-sm text-muted">{t("تحقق من توفر مساحة على الجهاز أو أعد فتح التطبيق.", "Check available device storage or reopen the app.")}</p>
           <button className="mt-4 rounded-xl bg-primary px-4 py-2 font-bold text-primary-fg" onClick={() => location.reload()}>{t("إعادة المحاولة", "Retry")}</button>
         </div>
       </div>
@@ -78,6 +86,7 @@ function Boot() {
                 <Route path="/subjects/:id" element={<SubjectPage />} />
                 <Route path="/semesters" element={<Semesters />} />
                 <Route path="/lectures/:id" element={<LecturePage />} />
+                <Route path="/record" element={<RecordLecture />} />
                 <Route path="/notes" element={<Notes />} />
                 <Route path="/notes/:id" element={<NoteEditor />} />
                 <Route path="/library" element={<Library />} />

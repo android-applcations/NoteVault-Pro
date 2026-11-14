@@ -29,9 +29,9 @@ import { Badge, Button, Input } from "./kit";
 import { TranscriptPanel } from "./TranscriptPanel";
 
 interface LectureRecorderPanelProps {
-  lectureId: string;
-  subjectId: string;
-  lectureTitle: string;
+  lectureId?: string;
+  subjectId?: string;
+  lectureTitle?: string;
 }
 
 export function LectureRecorderPanel({ lectureId, subjectId, lectureTitle }: LectureRecorderPanelProps) {
@@ -41,19 +41,29 @@ export function LectureRecorderPanel({ lectureId, subjectId, lectureTitle }: Lec
 
   const recordings: LectureRecording[] =
     useLiveQuery(async (): Promise<LectureRecording[]> => {
-      const rows = await db.recordings.where("lectureId").equals(lectureId).toArray();
+      const rows = lectureId
+        ? await db.recordings.where("lectureId").equals(lectureId).toArray()
+        : await db.recordings.toArray();
       return rows
-        .filter((r) => !r.deletedAt && r.status === "ready")
+        .filter((r) => {
+          if (r.deletedAt || r.status !== "ready") return false;
+          if (!lectureId && subjectId) return r.subjectId === subjectId;
+          return true;
+        })
         .sort((a, b) => b.createdAt - a.createdAt);
-    }, [lectureId], []) ?? [];
+    }, [lectureId, subjectId], []) ?? [];
 
   const interrupted: LectureRecording[] =
     useLiveQuery(() => listIncompleteRecordings(lectureId), [lectureId], []) ?? [];
 
   const lectureNotes: Note[] =
     useLiveQuery(
-      () => db.notes.where("lectureId").equals(lectureId).filter((n) => !n.deletedAt).toArray(),
-      [lectureId],
+      () => {
+        if (lectureId) return db.notes.where("lectureId").equals(lectureId).filter((n) => !n.deletedAt).toArray();
+        if (subjectId) return db.notes.where("subjectId").equals(subjectId).filter((n) => !n.deletedAt).toArray();
+        return Promise.resolve([] as Note[]);
+      },
+      [lectureId, subjectId],
       []
     ) ?? [];
 
@@ -79,15 +89,21 @@ export function LectureRecorderPanel({ lectureId, subjectId, lectureTitle }: Lec
     [selectedRecording?.attachmentId]
   );
 
+  const recordingPhaseActive =
+    recorder.phase === "recording" ||
+    recorder.phase === "paused" ||
+    recorder.phase === "saving" ||
+    recorder.phase === "requesting_mic";
   const activeHere =
-    (recorder.phase === "recording" || recorder.phase === "paused" || recorder.phase === "saving" || recorder.phase === "requesting_mic") &&
-    recorder.lectureId === lectureId;
+    recordingPhaseActive && (lectureId ? recorder.lectureId === lectureId : !recorder.lectureId);
   const activeElsewhere =
     (recorder.phase === "recording" || recorder.phase === "paused" || recorder.phase === "saving") &&
-    recorder.lectureId !== lectureId;
+    !activeHere;
+
+  const baseTitle = lectureTitle?.trim() || t("محاضرة", "Lecture");
 
   const handleStartRecording = async () => {
-    const label = titleInput.trim() || `${lectureTitle} — ${t("تسجيل", "Recording")} ${recordings.length + 1}`;
+    const label = titleInput.trim() || `${baseTitle} — ${t("تسجيل", "Recording")} ${recordings.length + 1}`;
     try {
       await lectureRecorder.start({ subjectId, lectureId, title: label });
       setTitleInput("");
@@ -95,13 +111,13 @@ export function LectureRecorderPanel({ lectureId, subjectId, lectureTitle }: Lec
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (msg === "MIC_PERMISSION_DENIED") {
-        toast(t("تم رفض إذن الميكروفون. فعّله من إعدادات المتصفح.", "Microphone permission denied. Allow mic access in browser settings."), "err");
+        toast(t("يرجى السماح بالوصول إلى الميكروفون من إعدادات الجهاز.", "Microphone access is required. Allow mic permission in device settings."), "err");
       } else if (msg === "MIC_UNSUPPORTED") {
-        toast(t("المتصفح الحالي لا يدعم تسجيل الصوت أو المتصفح غير آمن (HTTPS).", "Microphone recording is unavailable in this browser context."), "err");
+        toast(t("التسجيل الصوتي غير متاح حالياً.", "Microphone recording is currently unavailable."), "err");
       } else if (msg === "QUOTA_EXCEEDED") {
         toast(t("مساحة التخزين غير كافية لتسجيل الصوت.", "Not enough storage space to record audio."), "err");
       } else {
-        toast(msg, "err");
+        toast(t("تعذر بدء التسجيل الصوتي", "Could not start recording"), "err");
       }
     }
   };
@@ -142,7 +158,7 @@ export function LectureRecorderPanel({ lectureId, subjectId, lectureTitle }: Lec
       const n = await createNote({
         subjectId,
         lectureId,
-        title: `${t("ملاحظات", "Notes")}: ${lectureTitle}`,
+        title: `${t("ملاحظات", "Notes")}: ${baseTitle}`,
       });
       noteId = n.id;
     }
@@ -199,7 +215,7 @@ export function LectureRecorderPanel({ lectureId, subjectId, lectureTitle }: Lec
                 {t("تسجيل غير مكتمل يمكن استعادته", "Interrupted recording can be recovered")}: {rec.title}
               </div>
               <div className="text-xs text-muted">
-                {rec.chunkCount} {t("مقاطع", "chunks")} · {formatBytes(rec.totalBytes)} · {formatDuration(rec.durationMs)}
+                {rec.chunkCount} {t("أجزاء", "parts")} · {formatBytes(rec.totalBytes)} · {formatDuration(rec.durationMs)}
               </div>
             </div>
           </div>
@@ -221,22 +237,22 @@ export function LectureRecorderPanel({ lectureId, subjectId, lectureTitle }: Lec
       ))}
 
       {/* Recorder control box */}
-      <section className="card-surface p-5">
+      <section className="card-surface p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <div className={cn("flex h-10 w-10 items-center justify-center rounded-2xl", activeHere ? "bg-danger text-white" : "bg-primary/15 text-primary")}>
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl", activeHere ? "bg-danger text-white" : "bg-primary/15 text-primary")}>
               <Mic size={20} />
             </div>
-            <div>
+            <div className="min-w-0">
               <h2 className="text-base font-extrabold">{t("مسجل المحاضرة الصوتي", "Lecture Audio Recorder")}</h2>
               <p className="text-xs text-muted">
-                {t("حفظ تدريجي محلي كل 15 ثانية لحماية التسجيلات الطويلة", "Auto-saved in local chunks every 15s for crash safety")}
+                {t("يُحفظ التسجيل تلقائياً أثناء المحاضرة لحماية تسجيلاتك الطويلة", "Automatically saved continuously to protect long lectures")}
               </p>
             </div>
           </div>
 
           {!recorder.micSupported && (
-            <Badge color="#c42a3b">{t("الميكروفون غير متاح في هذا المتصفح", "Mic unavailable")}</Badge>
+            <Badge color="#c42a3b">{t("الميكروفون غير متاح", "Mic unavailable")}</Badge>
           )}
         </div>
 
@@ -245,7 +261,7 @@ export function LectureRecorderPanel({ lectureId, subjectId, lectureTitle }: Lec
             <span>
               {t("يوجد تسجيل نشط حاليًا لمحاضرة أخرى:", "Another lecture is currently recording:")} {recorder.title}
             </span>
-            <Button className="h-8 text-xs" onClick={() => recorder.lectureId && nav(`/lectures/${recorder.lectureId}`)}>
+            <Button className="h-8 text-xs" onClick={() => nav(recorder.lectureId ? `/lectures/${recorder.lectureId}` : "/record")}>
               {t("الانتقال للتسجيل النشط", "Open active recording")}
             </Button>
           </div>
@@ -256,8 +272,8 @@ export function LectureRecorderPanel({ lectureId, subjectId, lectureTitle }: Lec
             <Input
               value={titleInput}
               onChange={(e) => setTitleInput(e.target.value)}
-              placeholder={`${lectureTitle} — ${t("تسجيل", "Recording")} ${recordings.length + 1}`}
-              className="flex-1"
+              placeholder={`${baseTitle} — ${t("تسجيل", "Recording")} ${recordings.length + 1}`}
+              className="min-w-[180px] flex-1"
             />
             <Button
               variant="primary"
@@ -283,7 +299,7 @@ export function LectureRecorderPanel({ lectureId, subjectId, lectureTitle }: Lec
                   {formatDuration(recorder.elapsedMs)}
                 </span>
                 <span className="text-xs font-bold text-muted">
-                  {recorder.chunkCount} {t("مقطع محفوظ", "chunks saved")} · {formatBytes(recorder.bytesWritten)}
+                  {recorder.chunkCount} {t("أجزاء محفوظة", "parts saved")} · {formatBytes(recorder.bytesWritten)}
                 </span>
               </div>
 
