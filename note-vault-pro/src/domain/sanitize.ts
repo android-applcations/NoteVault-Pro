@@ -1,4 +1,4 @@
-// Security layer – structural sanitisation of stored/imported rich-text documents and URLs.
+// Security layer – structural sanitisation of stored/imported rich-text documents, URLs, and inline CSS values.
 import type { JSONContent } from "@tiptap/core";
 
 const SAFE_PROTOCOLS = new Set(["http:", "https:", "mailto:", "tel:"]);
@@ -22,8 +22,41 @@ export function safeUrl(input: unknown): string | null {
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const COLOR = /^(#[0-9a-f]{3,8}|rgba?\([\d\s.,%]+\)|hsla?\([\d\s.,%deg]+\))$/i;
-const SIZE = /^\d{1,3}(\.\d+)?(px|pt|em|rem)$/;
+const HEX_COLOR = /^#[0-9a-f]{6}$/i;
+const COLOR = /^(#[0-9a-f]{3,8}|rgba?\(\s*\d{1,3}(?:\.\d+)?(?:\s*,\s*|\s+)\d{1,3}(?:\.\d+)?(?:\s*,\s*|\s+)\d{1,3}(?:\.\d+)?(?:\s*[,/]\s*(?:0|1|0?\.\d+|\d{1,3}%))?\s*\)|hsla?\(\s*\d{1,3}(?:\.\d+)?(?:deg)?(?:\s*,\s*|\s+)\d{1,3}%(?:\s*,\s*|\s+)\d{1,3}%(?:\s*[,/]\s*(?:0|1|0?\.\d+|\d{1,3}%))?\s*\))$/i;
+const SIZE = /^\d{1,3}(\.\d{1,2})?(px|pt|em|rem)$/;
+const DATA_IMAGE = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/;
+
+/** Validates a CSS color string, returning a safe fallback when invalid or containing CSS injection characters. */
+export function safeCssColor(input: unknown, fallback = "#6366f1"): string {
+  if (typeof input !== "string") return fallback;
+  const trimmed = input.trim();
+  if (!trimmed || trimmed.length > 64) return fallback;
+  if (/[;{}'"\\<>]|url\s*\(|expression\s*\(|var\s*\(/i.test(trimmed)) return fallback;
+  return COLOR.test(trimmed) ? trimmed : fallback;
+}
+
+/** Validates a strict 6-digit hex color string (for subject / highlight colors). */
+export function safeHexColor(input: unknown, fallback = "#6366f1"): string {
+  if (typeof input !== "string") return fallback;
+  const trimmed = input.trim();
+  return HEX_COLOR.test(trimmed) ? trimmed : fallback;
+}
+
+/** Validates a safe raster data-URL image (PNG/JPEG/WebP only — never SVG). */
+export function safeDataImageUrl(input: unknown, maxBytes = 3_000_000): string | null {
+  if (typeof input !== "string") return null;
+  const trimmed = input.trim();
+  if (trimmed.length === 0 || trimmed.length > maxBytes) return null;
+  return DATA_IMAGE.test(trimmed) ? trimmed : null;
+}
+
+/** Validates a CSS font-size string used in Tiptap marks. */
+export function safeCssSize(input: unknown): string | null {
+  if (typeof input !== "string") return null;
+  const trimmed = input.trim();
+  return SIZE.test(trimmed) ? trimmed : null;
+}
 
 const NODES = new Set([
   "doc", "paragraph", "text", "heading", "bulletList", "orderedList", "listItem", "taskList", "taskItem",
@@ -71,13 +104,18 @@ function cleanAttrs(type: string, attrs: Record<string, unknown> | undefined): R
       out.rel = "noopener noreferrer nofollow";
       break;
     }
-    case "highlight":
-      if (typeof attrs.color === "string" && COLOR.test(attrs.color)) out.color = attrs.color;
+    case "highlight": {
+      const c = safeCssColor(attrs.color, "");
+      if (c) out.color = c;
       break;
-    case "textStyle":
-      if (typeof attrs.color === "string" && COLOR.test(attrs.color)) out.color = attrs.color;
-      if (typeof attrs.fontSize === "string" && SIZE.test(attrs.fontSize)) out.fontSize = attrs.fontSize;
+    }
+    case "textStyle": {
+      const c = safeCssColor(attrs.color, "");
+      if (c) out.color = c;
+      const sz = safeCssSize(attrs.fontSize);
+      if (sz) out.fontSize = sz;
       break;
+    }
     case "codeBlock":
       if (typeof attrs.language === "string" && /^[\w+#-]{1,20}$/.test(attrs.language)) out.language = attrs.language;
       break;

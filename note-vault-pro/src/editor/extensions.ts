@@ -11,6 +11,7 @@ import TextAlign from "@tiptap/extension-text-align";
 import { FontSize, TextStyle } from "@tiptap/extension-text-style";
 import StarterKit from "@tiptap/starter-kit";
 import { db } from "@/data/db";
+import { isUuid, safeCssColor, safeCssSize } from "@/domain/sanitize";
 
 /** Side note / callout block. */
 export const Callout = Node.create({
@@ -33,23 +34,35 @@ export const Formula = Mark.create({
 export const AttachmentImage = Image.extend({
   addAttributes() {
     return {
+      // Explicitly neutralize external/data-URL src from pasted HTML
+      src: {
+        default: null,
+        parseHTML: () => null,
+        renderHTML: () => ({}),
+      },
       attId: {
         default: null,
-        parseHTML: (el) => el.getAttribute("data-att-id"),
-        renderHTML: (a) => (a.attId ? { "data-att-id": a.attId } : {}),
+        parseHTML: (el) => {
+          const v = el.getAttribute("data-att-id");
+          return isUuid(v) ? v : null;
+        },
+        renderHTML: (a) => (isUuid(a.attId) ? { "data-att-id": a.attId } : {}),
       },
-      alt: { default: "" },
+      alt: {
+        default: "",
+        parseHTML: (el) => (el.getAttribute("alt") ?? "").slice(0, 500),
+      },
     };
   },
   addNodeView() {
     return ({ node }) => {
       const img = document.createElement("img");
-      img.alt = (node.attrs.alt as string) || "";
-      img.setAttribute("data-att-id", node.attrs.attId ?? "");
+      img.alt = typeof node.attrs.alt === "string" ? node.attrs.alt.slice(0, 500) : "";
+      const attId = isUuid(node.attrs.attId) ? node.attrs.attId : null;
+      img.setAttribute("data-att-id", attId ?? "");
       img.loading = "lazy";
       let url: string | null = null;
       let alive = true;
-      const attId = node.attrs.attId as string | null;
       if (attId) {
         db.attachments.get(attId).then(async (a) => {
           const rec = a && (await db.blobs.get(a.blobId));
@@ -74,6 +87,64 @@ export const AttachmentImage = Image.extend({
   },
 }).configure({ inline: false, allowBase64: false });
 
+const SafeColor = Color.extend({
+  addGlobalAttributes() {
+    return [
+      {
+        types: this.options.types,
+        attributes: {
+          color: {
+            default: null,
+            parseHTML: (el) => safeCssColor(el.style.color, "") || null,
+            renderHTML: (attrs) => {
+              const c = safeCssColor(attrs.color, "");
+              return c ? { style: `color: ${c}` } : {};
+            },
+          },
+        },
+      },
+    ];
+  },
+});
+
+const SafeFontSize = FontSize.extend({
+  addGlobalAttributes() {
+    return [
+      {
+        types: this.options.types,
+        attributes: {
+          fontSize: {
+            default: null,
+            parseHTML: (el) => safeCssSize(el.style.fontSize),
+            renderHTML: (attrs) => {
+              const sz = safeCssSize(attrs.fontSize);
+              return sz ? { style: `font-size: ${sz}` } : {};
+            },
+          },
+        },
+      },
+    ];
+  },
+});
+
+const SafeHighlight = Highlight.extend({
+  addAttributes() {
+    return {
+      color: {
+        default: null,
+        parseHTML: (el) => {
+          const raw = el.getAttribute("data-color") || el.style.backgroundColor;
+          return safeCssColor(raw, "") || null;
+        },
+        renderHTML: (attrs) => {
+          const c = safeCssColor(attrs.color, "");
+          return c ? { "data-color": c, style: `background-color: ${c}; color: inherit` } : {};
+        },
+      },
+    };
+  },
+});
+
 export function buildExtensions(placeholder: string) {
   return [
     StarterKit.configure({
@@ -86,9 +157,9 @@ export function buildExtensions(placeholder: string) {
       },
     }),
     TextStyle,
-    FontSize,
-    Color,
-    Highlight.configure({ multicolor: true }),
+    SafeFontSize,
+    SafeColor,
+    SafeHighlight.configure({ multicolor: true }),
     TaskList,
     TaskItem.configure({ nested: true }),
     Table.configure({ resizable: false }),

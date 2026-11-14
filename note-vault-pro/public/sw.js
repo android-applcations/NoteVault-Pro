@@ -1,12 +1,34 @@
 /* NoteVault Pro service worker — hand-written, no remote code, same-origin only. */
-const VERSION = "nv-v1";
+const VERSION = "__NV_SW_VERSION__";
 const SHELL_CACHE = `${VERSION}-shell`;
 const RUNTIME_CACHE = `${VERSION}-runtime`;
-const SHELL = ["./", "./index.html", "./manifest.webmanifest", "./offline.html", "./icon.svg", "./icon-192.png", "./icon-512.png", "./icon-maskable-512.png", "./apple-touch-icon.png"];
+const PRECACHE = /* __NV_PRECACHE_BEGIN__ */ [
+  "./",
+  "./index.html",
+  "./boot.js",
+  "./manifest.webmanifest",
+  "./offline.html",
+  "./icon.svg",
+  "./icon-192.png",
+  "./icon-512.png",
+  "./icon-maskable-512.png",
+  "./apple-touch-icon.png",
+] /* __NV_PRECACHE_END__ */;
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(SHELL_CACHE).then((cache) => Promise.all(SHELL.map((u) => cache.add(new Request(u, { cache: "reload" })).catch(() => undefined))))
+    (async () => {
+      const cache = await caches.open(SHELL_CACHE);
+      await Promise.all(
+        PRECACHE.map(async (u) => {
+          const res = await fetch(new Request(u, { cache: "reload" }));
+          if (!res || !res.ok) {
+            throw new Error(`Precache failed for ${u}: ${res ? res.status : "no response"}`);
+          }
+          await cache.put(u, res);
+        })
+      );
+    })()
   );
 });
 
@@ -14,53 +36,77 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     (async () => {
       const keys = await caches.keys();
-      await Promise.all(keys.filter((k) => !k.startsWith(VERSION)).map((k) => caches.delete(k)));
+      await Promise.all(
+        keys
+          .filter((k) => k !== SHELL_CACHE && k !== RUNTIME_CACHE)
+          .map((k) => caches.delete(k))
+      );
       await self.clients.claim();
     })()
   );
 });
 
 self.addEventListener("message", (event) => {
-  if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
+  if (event.source && "url" in event.source) {
+    try {
+      if (new URL(event.source.url).origin !== self.location.origin) return;
+    } catch {
+      return;
+    }
+  }
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
   const url = new URL(req.url);
-  if (url.origin !== self.location.origin) return; // never touch cross-origin requests
-  if (req.headers.has("range")) return; // let the browser handle range requests
+  if (url.origin !== self.location.origin) return;
+  if (req.headers.has("range")) return;
+  if (url.pathname.endsWith("/sw.js")) return;
 
   // Navigation: network-first with cached shell fallback (offline support)
   if (req.mode === "navigate") {
     event.respondWith(
       (async () => {
         try {
-          const fresh = await fetch(req);
-          if (fresh && fresh.ok) {
+          const fresh = await fetch(new Request(req, { cache: "no-cache" }));
+          if (fresh && fresh.ok && fresh.type === "basic") {
             const cache = await caches.open(SHELL_CACHE);
-            cache.put("./index.html", fresh.clone()).catch(() => undefined);
+            await cache.put("./index.html", fresh.clone()).catch(() => undefined);
           }
           return fresh;
         } catch {
           const cache = await caches.open(SHELL_CACHE);
-          return (await cache.match("./index.html")) || (await cache.match("./")) || (await cache.match("./offline.html")) || Response.error();
+          return (
+            (await cache.match("./index.html", { ignoreVary: true })) ||
+            (await cache.match("./", { ignoreVary: true })) ||
+            (await cache.match("./offline.html", { ignoreVary: true })) ||
+            Response.error()
+          );
         }
       })()
     );
     return;
   }
 
-  // Static assets: cache-first
+  // Static assets: search current version caches only (never stale caches)
   event.respondWith(
     (async () => {
-      const cached = await caches.match(req);
-      if (cached) return cached;
+      const shell = await caches.open(SHELL_CACHE);
+      const fromShell = await shell.match(req, { ignoreVary: true });
+      if (fromShell) return fromShell;
+
+      const runtime = await caches.open(RUNTIME_CACHE);
+      const fromRuntime = await runtime.match(req, { ignoreVary: true });
+      if (fromRuntime) return fromRuntime;
+
       try {
         const res = await fetch(req);
         if (res && res.ok && res.type === "basic") {
-          const cache = await caches.open(RUNTIME_CACHE);
-          cache.put(req, res.clone()).catch(() => undefined);
+          await runtime.put(req, res.clone()).catch(() => undefined);
         }
         return res;
       } catch {

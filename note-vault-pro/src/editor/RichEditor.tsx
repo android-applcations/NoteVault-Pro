@@ -3,18 +3,20 @@ import type { Editor, JSONContent } from "@tiptap/core";
 import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
 import { BubbleMenu } from "@tiptap/react/menus";
 import {
-  AlignCenter, AlignLeft, AlignRight, Bold, Code2, Heading1, Heading2, Heading3, Highlighter, ImagePlus, Italic, Layers, Link2, List, ListChecks, ListOrdered,
-  Minus, Palette, Pilcrow, Quote, Redo2, Sigma, StickyNote, Strikethrough, Table2, Underline, Undo2, RotateCw, ZoomIn, ZoomOut, Unlink,
+  AlignCenter, AlignLeft, AlignRight, Bold, Code2, Copy, FileText, Heading1, Heading2, Heading3, Highlighter, ImagePlus, Italic, Layers, Link2, List, ListChecks, ListOrdered,
+  Minus, Palette, Pilcrow, Quote, Redo2, ScanText, Sigma, StickyNote, Strikethrough, Table2, Underline, Undo2, RotateCw, ZoomIn, ZoomOut, Unlink,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { db } from "@/data/db";
 import type { Attachment } from "@/data/types";
 import { safeUrl } from "@/domain/sanitize";
 import { normalizeWithMap, normalize } from "@/domain/text";
-import { addFile, updateAttachment } from "@/services/files";
+import type { OcrLang } from "@/files/ocr";
+import { addFile, getBlob, updateAttachment } from "@/services/files";
 import { useApp } from "@/ui/app-context";
+import { FormulaView } from "@/ui/FormulaView";
 import { useI18n } from "@/ui/i18n";
-import { Button, Field, Input, Modal } from "@/ui/kit";
+import { Button, Field, Input, Modal, Select, Textarea } from "@/ui/kit";
 import { useBlobUrl, useFailureText } from "@/ui/shared";
 import { cn } from "@/utils/cn";
 import { buildExtensions } from "./extensions";
@@ -33,28 +35,87 @@ function Btn({ label, active, onClick, children, disabled }: { label: string; ac
 }
 const Sep = () => <span className="mx-0.5 h-5 w-px shrink-0 bg-line" aria-hidden />;
 
-function ImageViewer({ attId, onClose }: { attId: string | null; onClose: () => void }) {
+function ImageViewer({
+  attId,
+  onClose,
+  onInsertText,
+}: {
+  attId: string | null;
+  onClose: () => void;
+  onInsertText?: (text: string) => void;
+}) {
   const { t } = useI18n();
   const { toast } = useApp();
   const [att, setAtt] = useState<Attachment | undefined>(undefined);
   const [zoom, setZoom] = useState(1);
   const [rot, setRot] = useState(0);
   const [desc, setDesc] = useState("");
+  const [ocrLang, setOcrLang] = useState<OcrLang>("ara+eng");
+  const [ocrBusy, setOcrBusy] = useState(false);
+  const [ocrPct, setOcrPct] = useState(0);
+  const [ocrText, setOcrText] = useState("");
   const { url } = useBlobUrl(att);
   useEffect(() => {
-    setZoom(1); setRot(0);
+    setZoom(1);
+    setRot(0);
+    setOcrText("");
+    setOcrBusy(false);
+    setOcrPct(0);
     if (attId) db.attachments.get(attId).then((a) => { setAtt(a); setDesc(a?.description ?? ""); });
   }, [attId]);
+
+  const extractOcr = async () => {
+    if (!att || ocrBusy) return;
+    setOcrBusy(true);
+    setOcrPct(0);
+    try {
+      const blob = await getBlob(att);
+      if (!blob) throw new Error("NO_BLOB");
+      const { runImageOcr } = await import("@/files/ocr");
+      const text = await runImageOcr(blob, ocrLang, setOcrPct);
+      setOcrText(text);
+      if (!text) toast(t("لم يُعثر على نص واضح في الصورة", "No readable text found in image"), "info");
+    } catch {
+      toast(t("تعذر استخراج النص", "OCR failed"), "err");
+    } finally {
+      setOcrBusy(false);
+    }
+  };
+
   return (
     <Modal open={!!attId} onClose={onClose} title={att?.name ?? t("صورة", "Image")} wide
       footer={<><Button onClick={() => setZoom((z) => Math.max(0.25, z - 0.25))}><ZoomOut size={16} />{t("تصغير", "Zoom out")}</Button><Button onClick={() => setZoom((z) => Math.min(4, z + 0.25))}><ZoomIn size={16} />{t("تكبير", "Zoom in")}</Button><Button onClick={() => setRot((r) => (r + 90) % 360)}><RotateCw size={16} />{t("تدوير", "Rotate")}</Button></>}>
-      <div className="max-h-[55vh] overflow-auto rounded-xl bg-surface2 p-2 text-center">
+      <div className="max-h-[50vh] overflow-auto rounded-xl bg-surface2 p-2 text-center">
         {url ? <img src={url} alt={att?.description || att?.name || ""} style={{ transform: `scale(${zoom}) rotate(${rot}deg)`, transformOrigin: "center", transition: "transform .2s" }} className="inline-block max-w-full" /> : <p className="p-8 text-muted">{t("الصورة غير متاحة", "Image unavailable")}</p>}
       </div>
       {att && (
-        <Field label={t("وصف الصورة", "Image description")} className="mt-3">
-          {(id) => <div className="flex gap-2"><Input id={id} value={desc} onChange={(e) => setDesc(e.target.value)} dir="auto" /><Button onClick={async () => { await updateAttachment(att.id, { description: desc }); toast(t("تم حفظ الوصف", "Description saved")); }}>{t("حفظ", "Save")}</Button></div>}
-        </Field>
+        <>
+          <Field label={t("وصف الصورة", "Image description")} className="mt-3">
+            {(id) => <div className="flex gap-2"><Input id={id} value={desc} onChange={(e) => setDesc(e.target.value)} dir="auto" /><Button onClick={async () => { await updateAttachment(att.id, { description: desc }); toast(t("تم حفظ الوصف", "Description saved")); }}>{t("حفظ", "Save")}</Button></div>}
+          </Field>
+          <div className="mt-3 rounded-xl border border-line bg-surface2/50 p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Select aria-label={t("لغة OCR", "OCR language")} value={ocrLang} onChange={(e) => setOcrLang(e.target.value as OcrLang)} className="!w-auto">
+                <option value="ara+eng">{t("العربية + الإنجليزية", "Arabic + English")}</option>
+                <option value="eng">English</option>
+                <option value="ara">{t("العربية", "Arabic")}</option>
+              </Select>
+              <Button disabled={ocrBusy} onClick={() => void extractOcr()}>
+                <ScanText size={16} />
+                {ocrBusy ? `${t("جارٍ الاستخراج…", "Extracting…")} ${ocrPct}%` : t("استخراج النص (OCR)", "Extract text (OCR)")}
+              </Button>
+            </div>
+            {ocrText && (
+              <div className="mt-2 space-y-2">
+                <Textarea rows={4} value={ocrText} onChange={(e) => setOcrText(e.target.value)} dir="auto" />
+                <div className="flex flex-wrap gap-2">
+                  <Button onClick={async () => { await navigator.clipboard?.writeText(ocrText); toast(t("تم النسخ", "Copied")); }}><Copy size={14} />{t("نسخ", "Copy")}</Button>
+                  {onInsertText && <Button variant="primary" onClick={() => { onInsertText(ocrText); onClose(); toast(t("أُدرج النص في الملاحظة", "Inserted into note")); }}><FileText size={14} />{t("إدراج في الملاحظة", "Insert into note")}</Button>}
+                </div>
+              </div>
+            )}
+          </div>
+        </>
       )}
     </Modal>
   );
@@ -72,6 +133,7 @@ const SLASH: SlashCmd[] = [
   { id: "quote", ar: "اقتباس", en: "Quote", keys: "quote اقتباس", icon: <Quote size={16} />, run: (e) => e.chain().focus().toggleBlockquote().run() },
   { id: "callout", ar: "ملاحظة جانبية", en: "Side note", keys: "callout note ملاحظة", icon: <StickyNote size={16} />, run: (e) => e.chain().focus().toggleWrap("callout").run() },
   { id: "code", ar: "كود برمجي", en: "Code block", keys: "code كود", icon: <Code2 size={16} />, run: (e) => e.chain().focus().toggleCodeBlock().run() },
+  { id: "formula", ar: "معادلة رياضية (LaTeX)", en: "Math formula (LaTeX)", keys: "formula math latex معادلة رياضيات", icon: <Sigma size={16} />, run: () => window.dispatchEvent(new CustomEvent("nv-open-formula")) },
   { id: "table", ar: "جدول", en: "Table", keys: "table جدول", icon: <Table2 size={16} />, run: (e) => e.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
   { id: "hr", ar: "فاصل", en: "Divider", keys: "divider hr فاصل", icon: <Minus size={16} />, run: (e) => e.chain().focus().setHorizontalRule().run() },
 ];
@@ -92,6 +154,8 @@ export function RichEditor({ content, noteId, onUpdate, onCreateCard, searchTerm
   const fileInput = useRef<HTMLInputElement>(null);
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState("");
+  const [formulaOpen, setFormulaOpen] = useState(false);
+  const [formulaTex, setFormulaTex] = useState("\\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}");
   const [palette, setPalette] = useState<"color" | "hl" | null>(null);
   const [imgView, setImgView] = useState<string | null>(null);
   const [slash, setSlash] = useState<{ q: string; x: number; y: number } | null>(null);
@@ -151,6 +215,17 @@ export function RichEditor({ content, noteId, onUpdate, onCreateCard, searchTerm
   editorInstance.current = editor;
   useEffect(() => { editorRef?.(editor); return () => editorRef?.(null); }, [editor, editorRef]);
   useEffect(() => { const h = (e: Event) => setImgView((e as CustomEvent).detail?.attId ?? null); window.addEventListener("nv-open-image", h); return () => window.removeEventListener("nv-open-image", h); }, []);
+  useEffect(() => {
+    const h = () => {
+      const ed = editorInstance.current;
+      if (ed && !ed.state.selection.empty) {
+        setFormulaTex(ed.state.doc.textBetween(ed.state.selection.from, ed.state.selection.to, " "));
+      }
+      setFormulaOpen(true);
+    };
+    window.addEventListener("nv-open-formula", h);
+    return () => window.removeEventListener("nv-open-formula", h);
+  }, []);
 
   // jump to the first match when opened from search
   useEffect(() => {
@@ -175,10 +250,25 @@ export function RichEditor({ content, noteId, onUpdate, onCreateCard, searchTerm
     selector: (ctx) => {
       const e = ctx.editor;
       if (!e) return null;
+      const isFormula = e.isActive("formula");
+      let formulaText = "";
+      if (isFormula) {
+        const { from, to, empty, $from } = e.state.selection;
+        if (!empty) {
+          formulaText = e.state.doc.textBetween(from, to, " ");
+        } else {
+          $from.parent.forEach((child, offset) => {
+            const pos = $from.parentOffset;
+            if (child.isText && child.marks.some((m) => m.type.name === "formula") && pos >= offset && pos <= offset + child.nodeSize) {
+              formulaText = child.text ?? "";
+            }
+          });
+        }
+      }
       return {
         bold: e.isActive("bold"), italic: e.isActive("italic"), underline: e.isActive("underline"), strike: e.isActive("strike"), h1: e.isActive("heading", { level: 1 }),
         h2: e.isActive("heading", { level: 2 }), h3: e.isActive("heading", { level: 3 }), ul: e.isActive("bulletList"), ol: e.isActive("orderedList"), todo: e.isActive("taskList"),
-        quote: e.isActive("blockquote"), code: e.isActive("codeBlock"), callout: e.isActive("callout"), link: e.isActive("link"), table: e.isActive("table"), formula: e.isActive("formula"),
+        quote: e.isActive("blockquote"), code: e.isActive("codeBlock"), callout: e.isActive("callout"), link: e.isActive("link"), table: e.isActive("table"), formula: isFormula, formulaText,
         hl: e.isActive("highlight"), canUndo: e.can().undo(), canRedo: e.can().redo(), size: (e.getAttributes("textStyle").fontSize as string) ?? "", align: e.isActive({ textAlign: "center" }) ? "center" : e.isActive({ textAlign: "right" }) ? "right" : "left",
       };
     },
@@ -194,6 +284,24 @@ export function RichEditor({ content, noteId, onUpdate, onCreateCard, searchTerm
     if (!safe) return toast(t("رابط غير مسموح. استخدم http أو https أو mailto أو tel.", "Link not allowed. Use http, https, mailto or tel."), "err");
     c().extendMarkRange("link").setLink({ href: safe }).run();
     setLinkOpen(false);
+  };
+  const openFormula = () => {
+    if (!editor.state.selection.empty) {
+      if (st.formula) {
+        c().unsetMark("formula").run();
+        return;
+      }
+      c().setMark("formula").run();
+      return;
+    }
+    if (st.formulaText) setFormulaTex(st.formulaText);
+    setFormulaOpen(true);
+  };
+  const insertFormula = () => {
+    const clean = formulaTex.trim();
+    if (!clean) return setFormulaOpen(false);
+    c().insertContent({ type: "text", text: clean, marks: [{ type: "formula" }] }).run();
+    setFormulaOpen(false);
   };
   const insertImages = async (files: FileList | null) => {
     if (!files) return;
@@ -242,7 +350,7 @@ export function RichEditor({ content, noteId, onUpdate, onCreateCard, searchTerm
           <Btn label={t("اقتباس", "Quote")} active={st.quote} onClick={() => c().toggleBlockquote().run()}><Quote size={17} /></Btn>
           <Btn label={t("ملاحظة جانبية", "Side note")} active={st.callout} onClick={() => c().toggleWrap("callout").run()}><StickyNote size={17} /></Btn>
           <Btn label={t("كود برمجي", "Code block")} active={st.code} onClick={() => c().toggleCodeBlock().run()}><Code2 size={17} /></Btn>
-          <Btn label={t("معادلة (نص محدد)", "Formula (selected text)")} active={st.formula} onClick={() => c().toggleMark("formula").run()}><Sigma size={17} /></Btn>
+          <Btn label={t("معادلة رياضية (LaTeX)", "Math formula (LaTeX)")} active={st.formula} onClick={openFormula}><Sigma size={17} /></Btn>
           <Btn label={t("فاصل", "Divider")} onClick={() => c().setHorizontalRule().run()}><Minus size={17} /></Btn>
           <Btn label={t("رابط", "Link")} active={st.link} onClick={openLink}><Link2 size={17} /></Btn>
           <Btn label={t("جدول", "Table")} active={st.table} onClick={() => c().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}><Table2 size={17} /></Btn>
@@ -258,6 +366,12 @@ export function RichEditor({ content, noteId, onUpdate, onCreateCard, searchTerm
         {st.table && (
           <div className="flex flex-wrap gap-1 border-t border-line py-1.5 text-xs">
             {([[t("عمود +", "Col +"), () => c().addColumnAfter().run()], [t("صف +", "Row +"), () => c().addRowAfter().run()], [t("حذف عمود", "Del col"), () => c().deleteColumn().run()], [t("حذف صف", "Del row"), () => c().deleteRow().run()], [t("دمج/فصل", "Merge/split"), () => c().mergeOrSplit().run()], [t("حذف الجدول", "Delete table"), () => c().deleteTable().run()]] as [string, () => void][]).map(([l, f]) => <button key={l} type="button" onMouseDown={(e) => e.preventDefault()} onClick={f} className="rounded-lg bg-surface2 px-2.5 py-1.5 font-bold hover:bg-line/60">{l}</button>)}
+          </div>
+        )}
+        {st.formula && st.formulaText && (
+          <div className="flex items-center justify-between gap-2 border-t border-line py-1.5 text-sm">
+            <span className="text-xs font-bold text-muted">{t("معاينة المعادلة:", "Formula preview:")}</span>
+            <FormulaView tex={st.formulaText} className="px-2 py-0.5 text-base" />
           </div>
         )}
       </div>
@@ -289,7 +403,39 @@ export function RichEditor({ content, noteId, onUpdate, onCreateCard, searchTerm
       <Modal open={linkOpen} onClose={() => setLinkOpen(false)} title={t("إدراج رابط", "Insert link")} footer={<><Button onClick={() => setLinkOpen(false)}>{t("إلغاء", "Cancel")}</Button><Button variant="primary" onClick={applyLink}>{t("تطبيق", "Apply")}</Button></>}>
         <Field label={t("العنوان (URL)", "URL")} hint={t("اتركه فارغاً لإزالة الرابط", "Leave empty to remove the link")}>{(id) => <Input id={id} dir="ltr" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} onKeyDown={(e) => e.key === "Enter" && applyLink()} />}</Field>
       </Modal>
-      <ImageViewer attId={imgView} onClose={() => setImgView(null)} />
+      <Modal open={formulaOpen} onClose={() => setFormulaOpen(false)} title={t("إدراج معادلة رياضية (LaTeX)", "Insert math formula (LaTeX)")} wide footer={<><Button onClick={() => setFormulaOpen(false)}>{t("إلغاء", "Cancel")}</Button><Button variant="primary" onClick={insertFormula}>{t("إدراج", "Insert")}</Button></>}>
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-1.5">
+            {[
+              ["a/b", "\\frac{a}{b}"],
+              ["√x", "\\sqrt{x}"],
+              ["xⁿ", "x^{n}"],
+              ["∑", "\\sum_{i=1}^{n} x_i"],
+              ["∫", "\\int_{a}^{b} f(x)\\,dx"],
+              ["lim", "\\lim_{x \\to \\infty} f(x)"],
+              ["α,β,θ", "\\alpha + \\beta = \\theta"],
+            ].map(([label, snip]) => (
+              <Button key={label} className="!min-h-8 !px-2.5 !py-1 text-xs" onClick={() => setFormulaTex((prev) => (prev ? `${prev} ${snip}` : snip))}>
+                {label}
+              </Button>
+            ))}
+          </div>
+          <Field label={t("صيغة LaTeX", "LaTeX expression")}>
+            {(id) => <Input id={id} dir="ltr" value={formulaTex} onChange={(e) => setFormulaTex(e.target.value)} onKeyDown={(e) => e.key === "Enter" && insertFormula()} />}
+          </Field>
+          <div className="rounded-xl border border-line bg-surface2/60 p-4">
+            <div className="mb-1 text-xs font-bold text-muted">{t("المعاينة الحية", "Live preview")}</div>
+            <FormulaView tex={formulaTex} displayMode className="text-lg" />
+          </div>
+        </div>
+      </Modal>
+      <ImageViewer
+        attId={imgView}
+        onClose={() => setImgView(null)}
+        onInsertText={(ocrTxt) => {
+          c().insertContent({ type: "paragraph", content: [{ type: "text", text: ocrTxt }] }).run();
+        }}
+      />
     </div>
   );
 }

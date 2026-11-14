@@ -99,22 +99,41 @@ export type LectureInput = Partial<Omit<Lecture, "id" | "createdAt" | "updatedAt
 export async function createLecture(data: LectureInput): Promise<Lecture> {
   const title = data.title.trim();
   if (!title) throw new Error("NAME_REQUIRED");
+  const subj = await db.subjects.get(data.subjectId);
+  if (!subj || subj.deletedAt) throw new Error("NOT_FOUND");
   const t = Date.now();
+  const week = Math.max(1, Math.min(999, Math.round(data.week ?? 1) || 1));
+  const progress = Math.max(0, Math.min(100, Math.round(data.progress ?? 0) || 0));
   const l: Lecture = {
-    id: uid(), subjectId: data.subjectId, title, week: data.week ?? 1, date: data.date || todayISO(),
-    description: data.description?.trim() ?? "", keywords: data.keywords ?? [], reviewStatus: data.reviewStatus ?? "new",
-    progress: data.progress ?? 0, archived: false, createdAt: t, updatedAt: t,
+    id: uid(), subjectId: data.subjectId, title, week, date: data.date || todayISO(),
+    description: data.description?.trim() ?? "", keywords: (data.keywords ?? []).map((k) => k.trim()).filter(Boolean), reviewStatus: data.reviewStatus ?? "new",
+    progress, archived: false, createdAt: t, updatedAt: t,
   };
   await db.lectures.add(l);
   await reindex("lecture", l.id);
   await logActivity("create", title, "lecture", l.id);
   return l;
 }
-export async function updateLecture(id: string, patch: Partial<Omit<Lecture, "id" | "createdAt">>) {
-  if (patch.title !== undefined && !patch.title.trim()) throw new Error("NAME_REQUIRED");
-  if (patch.progress !== undefined) patch.progress = Math.max(0, Math.min(100, Math.round(patch.progress)));
-  await db.lectures.update(id, { ...patch, updatedAt: Date.now() });
+export async function updateLecture(id: string, patch: Partial<Omit<Lecture, "id" | "createdAt">>): Promise<Lecture> {
+  const cur = await db.lectures.get(id);
+  if (!cur || cur.deletedAt) throw new Error("NOT_FOUND");
+  const nextPatch = { ...patch };
+  if (nextPatch.title !== undefined) {
+    nextPatch.title = nextPatch.title.trim();
+    if (!nextPatch.title) throw new Error("NAME_REQUIRED");
+  }
+  if (nextPatch.subjectId !== undefined) {
+    const subj = await db.subjects.get(nextPatch.subjectId);
+    if (!subj || subj.deletedAt) throw new Error("NOT_FOUND");
+  }
+  if (nextPatch.week !== undefined) nextPatch.week = Math.max(1, Math.min(999, Math.round(nextPatch.week) || 1));
+  if (nextPatch.progress !== undefined) nextPatch.progress = Math.max(0, Math.min(100, Math.round(nextPatch.progress)));
+  if (nextPatch.description !== undefined) nextPatch.description = nextPatch.description.trim();
+  if (nextPatch.keywords !== undefined) nextPatch.keywords = nextPatch.keywords.map((k) => k.trim()).filter(Boolean);
+  const updatedAt = Date.now();
+  await db.lectures.update(id, { ...nextPatch, updatedAt });
   await reindex("lecture", id);
+  return { ...cur, ...nextPatch, updatedAt };
 }
 export async function setReviewStatus(id: string, status: ReviewStatus) {
   await updateLecture(id, { reviewStatus: status, ...(status === "mastered" ? { progress: 100 } : {}) });

@@ -88,6 +88,8 @@ export interface BlobRecord {
 export interface PdfDocument {
   id: ID; // = attachment id
   pages: number;
+  indexedPages?: number;
+  indexStatus?: "idle" | "indexing" | "paused" | "partial" | "done" | "error";
   lastPage: number;
   zoom: number;
   pageTexts: string[];
@@ -101,12 +103,19 @@ export interface Bookmark {
   label: string;
   createdAt: number;
 }
+export interface HighlightRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
 export interface Highlight {
   id: ID;
   attachmentId: ID;
   page: number;
   text: string;
   color: string;
+  rects?: HighlightRect[];
   createdAt: number;
 }
 export interface Annotation extends Base {

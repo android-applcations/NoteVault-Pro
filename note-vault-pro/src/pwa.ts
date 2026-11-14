@@ -6,11 +6,11 @@ let updateRequested = false;
 export function registerServiceWorker(onUpdate: (apply: () => void) => void) {
   if (!("serviceWorker" in navigator) || !/^https?:$/.test(location.protocol)) return;
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (updateRequested) location.reload(); // only reload when the user accepted the update
+    if (updateRequested) location.reload();
   });
   const go = () => {
     navigator.serviceWorker
-      .register("./sw.js")
+      .register("./sw.js", { updateViaCache: "none" })
       .then((reg) => {
         const offer = (w: ServiceWorker) =>
           onUpdate(() => {
@@ -23,6 +23,9 @@ export function registerServiceWorker(onUpdate: (apply: () => void) => void) {
           nw?.addEventListener("statechange", () => {
             if (nw.state === "installed" && navigator.serviceWorker.controller) offer(nw);
           });
+        });
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState === "visible") void reg.update().catch(() => undefined);
         });
         setInterval(() => void reg.update().catch(() => undefined), 60 * 60 * 1000);
       })
@@ -57,12 +60,17 @@ export function useInstall() {
     listeners.add(l);
     return () => void listeners.delete(l);
   }, []);
-  const standalone = window.matchMedia("(display-mode: standalone)").matches || (navigator as unknown as { standalone?: boolean }).standalone === true;
-  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const standalone =
+    window.matchMedia("(display-mode: standalone)").matches ||
+    (navigator as unknown as { standalone?: boolean }).standalone === true;
+  const ua = navigator.userAgent;
+  const ios = /iphone|ipad|ipod/i.test(ua) || (/macintosh/i.test(ua) && navigator.maxTouchPoints > 1);
+  const android = /android/i.test(ua);
   return {
     canInstall: !!deferred,
     installed: standalone,
     ios: ios && !standalone,
+    android: android && !standalone,
     install: async () => {
       if (!deferred) return;
       await deferred.prompt();

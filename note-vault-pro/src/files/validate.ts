@@ -1,113 +1,154 @@
-// File processing layer – validation (extension, size, magic bytes) and image compression.
-import type { FileKind } from "@/data/types";
-import { sanitizeFileName } from "@/domain/text";
+// File processing layer – workerized validation, bomb guards, hashing, and image processing.
+import {
+  EXT_MAP,
+  MAX_IMAGE_DIM,
+  MAX_IMAGE_PIXELS,
+  sha256Blob,
+  validateBlobStructure,
+  validateFileCore,
+  type ValidationResult,
+} from "./fileCore";
+import type { WorkerRequest, WorkerResponse } from "./fileWorker";
 
-export const MAX_FILE_BYTES = 250 * 1024 * 1024;
+export {
+  EXT_MAP,
+  MAX_AUDIO_BYTES,
+  MAX_FILE_BYTES,
+  MAX_IMAGE_BYTES,
+  MAX_IMAGE_DIM,
+  MAX_IMAGE_PIXELS,
+  MAX_PDF_BYTES,
+  MAX_TEXT_BYTES,
+  validateBlobStructure,
+  type Validated,
+  type ValidationFailureReason,
+  type ValidationResult,
+} from "./fileCore";
 
-const EXT: Record<string, { kind: FileKind; mime: string }> = {
-  pdf: { kind: "pdf", mime: "application/pdf" },
-  png: { kind: "image", mime: "image/png" },
-  jpg: { kind: "image", mime: "image/jpeg" },
-  jpeg: { kind: "image", mime: "image/jpeg" },
-  webp: { kind: "image", mime: "image/webp" },
-  txt: { kind: "text", mime: "text/plain" },
-  md: { kind: "markdown", mime: "text/markdown" },
-  markdown: { kind: "markdown", mime: "text/markdown" },
-  mp3: { kind: "audio", mime: "audio/mpeg" },
-  wav: { kind: "audio", mime: "audio/wav" },
-  ogg: { kind: "audio", mime: "audio/ogg" },
-  oga: { kind: "audio", mime: "audio/ogg" },
-  m4a: { kind: "audio", mime: "audio/mp4" },
-  aac: { kind: "audio", mime: "audio/aac" },
-  webm: { kind: "audio", mime: "audio/webm" },
-  flac: { kind: "audio", mime: "audio/flac" },
-};
-export const ACCEPT_ATTR = Object.keys(EXT).map((e) => "." + e).join(",");
+export const ACCEPT_ATTR = Object.keys(EXT_MAP)
+  .map((e) => "." + e)
+  .join(",");
 export const SUPPORTED_LABEL = "PDF, PNG, JPG, WebP, TXT, MD, MP3, WAV, OGG, M4A, AAC, FLAC, WebM(audio)";
 
-const ascii = (b: Uint8Array, from: number, s: string) => s.split("").every((c, i) => b[from + i] === c.charCodeAt(0));
+type Pending = { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> };
+let worker: Worker | null = null;
+let nextId = 1;
+const pending = new Map<number, Pending>();
 
-function sniffAudio(b: Uint8Array): boolean {
-  if (ascii(b, 0, "ID3")) return true; // mp3 with tag
-  if (b[0] === 0xff && (b[1] & 0xe0) === 0xe0) return true; // mp3/aac frame
-  if (ascii(b, 0, "RIFF") && ascii(b, 8, "WAVE")) return true;
-  if (ascii(b, 0, "OggS")) return true;
-  if (ascii(b, 0, "fLaC")) return true;
-  if (ascii(b, 4, "ftyp")) return true;
-  if (b[0] === 0x1a && b[1] === 0x45 && b[2] === 0xdf && b[3] === 0xa3) return true; // webm/matroska
-  return false;
-}
-
-export interface Validated {
-  ok: true;
-  kind: FileKind;
-  mime: string;
-  name: string;
-}
-export type ValidationResult = Validated | { ok: false; reason: "type" | "size" | "empty" | "mismatch" | "binary_text" | "bad_encoding" };
-
-/** Validates by extension, size and magic bytes. MIME reported by the browser is never trusted. */
-export async function validateFile(file: File, maxBytes = MAX_FILE_BYTES): Promise<ValidationResult> {
-  const name = sanitizeFileName(file.name);
-  const ext = name.includes(".") ? name.split(".").pop()!.toLowerCase() : "";
-  const def = EXT[ext];
-  if (!def) return { ok: false, reason: "type" };
-  if (file.size === 0) return { ok: false, reason: "empty" };
-  if (file.size > maxBytes) return { ok: false, reason: "size" };
-  const head = new Uint8Array(await file.slice(0, 32).arrayBuffer());
-  let ok = false;
-  switch (def.kind) {
-    case "pdf": {
-      const first = new Uint8Array(await file.slice(0, 1024).arrayBuffer());
-      const s = Array.from(first, (c) => String.fromCharCode(c)).join("");
-      ok = s.includes("%PDF-");
-      break;
+function resetWorker(err: Error) {
+  if (worker) {
+    try {
+      worker.terminate();
+    } catch {
+      /* ignore */
     }
-    case "image":
-      if (def.mime === "image/png") ok = head[0] === 0x89 && ascii(head, 1, "PNG");
-      else if (def.mime === "image/jpeg") ok = head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff;
-      else ok = ascii(head, 0, "RIFF") && ascii(head, 8, "WEBP");
-      break;
-    case "audio":
-      ok = sniffAudio(head);
-      break;
-    case "text":
-    case "markdown": {
-      const sample = new Uint8Array(await file.slice(0, 65536).arrayBuffer());
-      if (sample.includes(0)) return { ok: false, reason: "binary_text" };
-      try {
-        new TextDecoder("utf-8", { fatal: true }).decode(sample.subarray(0, sample.length - 3 > 0 ? sample.length - 3 : sample.length));
-        ok = true;
-      } catch {
-        return { ok: false, reason: "bad_encoding" };
-      }
-      break;
+    worker = null;
+  }
+  for (const [, p] of pending) {
+    clearTimeout(p.timer);
+    p.reject(err);
+  }
+  pending.clear();
+}
+
+function getWorker(): Worker | null {
+  if (typeof window === "undefined" || typeof Worker === "undefined") return null;
+  if (!worker) {
+    try {
+      worker = new Worker(new URL("./fileWorker.ts", import.meta.url), { type: "module" });
+      worker.addEventListener("message", (ev: MessageEvent<WorkerResponse>) => {
+        const msg = ev.data;
+        const p = pending.get(msg.id);
+        if (!p) return;
+        pending.delete(msg.id);
+        clearTimeout(p.timer);
+        if (msg.ok) p.resolve(msg.result);
+        else p.reject(new Error(msg.error));
+      });
+      worker.addEventListener("error", () => resetWorker(new Error("FILE_WORKER_FAILED")));
+    } catch {
+      worker = null;
     }
   }
-  if (!ok) return { ok: false, reason: "mismatch" };
-  return { ok: true, kind: def.kind, mime: def.mime, name };
+  return worker;
+}
+
+async function runWorker<T>(
+  build: (id: number) => WorkerRequest,
+  fallback: () => Promise<T>,
+  timeoutMs = 30_000
+): Promise<T> {
+  const w = getWorker();
+  if (!w) return fallback();
+  const id = nextId++;
+  try {
+    return (await new Promise<unknown>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        pending.delete(id);
+        resetWorker(new Error("FILE_WORKER_TIMEOUT"));
+      }, timeoutMs);
+      pending.set(id, { resolve, reject, timer });
+      w.postMessage(build(id));
+    })) as T;
+  } catch {
+    return fallback();
+  }
+}
+
+/** Validates by extension, per-kind size limit, structural signatures, and pre-decode dimension bounds. */
+export async function validateFile(file: File, maxBytes?: number): Promise<ValidationResult> {
+  return runWorker(
+    (id) => ({ id, op: "validate", file, maxBytes }),
+    () => validateFileCore(file, maxBytes)
+  );
 }
 
 export async function sha256(blob: Blob): Promise<string> {
-  try {
-    if (crypto?.subtle) {
-      const buf = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
-      return Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, "0")).join("");
-    }
-  } catch {
-    /* fall through */
-  }
-  return `size-${blob.size}-${Date.now()}`;
+  return runWorker(
+    (id) => ({ id, op: "sha256", blob }),
+    () => sha256Blob(blob)
+  );
 }
 
-async function loadBitmap(blob: Blob): Promise<ImageBitmap | HTMLImageElement> {
-  if (typeof createImageBitmap === "function") return createImageBitmap(blob);
+async function loadBitmapMain(blob: Blob): Promise<{ src: ImageBitmap | HTMLImageElement; width: number; height: number; close: () => void }> {
+  if (typeof createImageBitmap === "function") {
+    const bmp = await createImageBitmap(blob);
+    if (
+      !Number.isFinite(bmp.width) ||
+      !Number.isFinite(bmp.height) ||
+      bmp.width <= 0 ||
+      bmp.height <= 0 ||
+      bmp.width > MAX_IMAGE_DIM ||
+      bmp.height > MAX_IMAGE_DIM ||
+      bmp.width * bmp.height > MAX_IMAGE_PIXELS
+    ) {
+      bmp.close();
+      throw new Error("IMAGE_DIMENSIONS_EXCEEDED");
+    }
+    return { src: bmp, width: bmp.width, height: bmp.height, close: () => bmp.close() };
+  }
   const url = URL.createObjectURL(blob);
   try {
     const img = new Image();
     img.src = url;
     await img.decode();
-    return img;
+    if (
+      img.naturalWidth <= 0 ||
+      img.naturalHeight <= 0 ||
+      img.naturalWidth > MAX_IMAGE_DIM ||
+      img.naturalHeight > MAX_IMAGE_DIM ||
+      img.naturalWidth * img.naturalHeight > MAX_IMAGE_PIXELS
+    ) {
+      throw new Error("IMAGE_DIMENSIONS_EXCEEDED");
+    }
+    return {
+      src: img,
+      width: img.naturalWidth,
+      height: img.naturalHeight,
+      close: () => {
+        img.src = "";
+      },
+    };
   } finally {
     URL.revokeObjectURL(url);
   }
@@ -117,44 +158,85 @@ function toBlob(canvas: HTMLCanvasElement, type: string, q: number): Promise<Blo
   return new Promise((res) => canvas.toBlob(res, type, q));
 }
 
-/** Downscales large images; returns the original when compression would not help. */
-export async function compressImage(blob: Blob, mime: string, maxDim = 2400): Promise<Blob> {
+async function compressImageFallback(blob: Blob, mime: string, maxDim = 2400): Promise<Blob> {
+  if (typeof document === "undefined") return blob;
+  const struct = await validateBlobStructure(blob, "image", mime);
+  if (!struct.ok) return blob;
+  if (blob.size < 1.2 * 1024 * 1024 && mime !== "image/png") return blob;
+  let loaded: Awaited<ReturnType<typeof loadBitmapMain>> | null = null;
+  let c: HTMLCanvasElement | null = null;
   try {
-    if (blob.size < 1.2 * 1024 * 1024 && mime !== "image/png") return blob;
-    const bmp = await loadBitmap(blob);
-    const w = "width" in bmp ? bmp.width : 0;
-    const h = "height" in bmp ? bmp.height : 0;
-    const scale = Math.min(1, maxDim / Math.max(w, h));
+    loaded = await loadBitmapMain(blob);
+    const scale = Math.min(1, maxDim / Math.max(loaded.width, loaded.height));
     if (scale === 1 && blob.size < 3 * 1024 * 1024) return blob;
-    const c = document.createElement("canvas");
-    c.width = Math.round(w * scale);
-    c.height = Math.round(h * scale);
-    c.getContext("2d")!.drawImage(bmp as CanvasImageSource, 0, 0, c.width, c.height);
+    c = document.createElement("canvas");
+    c.width = Math.max(1, Math.round(loaded.width * scale));
+    c.height = Math.max(1, Math.round(loaded.height * scale));
+    const ctx = c.getContext("2d");
+    if (!ctx) return blob;
+    ctx.drawImage(loaded.src, 0, 0, c.width, c.height);
     const out = await toBlob(c, mime === "image/png" && blob.size < 4 * 1024 * 1024 ? "image/png" : "image/webp", 0.86);
     return out && out.size < blob.size ? out : blob;
   } catch {
     return blob;
+  } finally {
+    loaded?.close();
+    if (c) {
+      c.width = 0;
+      c.height = 0;
+    }
   }
 }
 
-/** Creates a small JPEG data URL thumbnail from an image blob. */
-export async function imageThumb(blob: Blob, size = 240): Promise<string | undefined> {
+async function imageThumbFallback(blob: Blob, size = 240): Promise<string | undefined> {
+  if (typeof document === "undefined") return undefined;
+  let loaded: Awaited<ReturnType<typeof loadBitmapMain>> | null = null;
+  let c: HTMLCanvasElement | null = null;
   try {
-    const bmp = await loadBitmap(blob);
-    const w = "width" in bmp ? bmp.width : 1;
-    const h = "height" in bmp ? bmp.height : 1;
-    const scale = Math.min(1, size / Math.max(w, h));
-    const c = document.createElement("canvas");
-    c.width = Math.max(1, Math.round(w * scale));
-    c.height = Math.max(1, Math.round(h * scale));
-    const ctx = c.getContext("2d")!;
+    loaded = await loadBitmapMain(blob);
+    const scale = Math.min(1, size / Math.max(loaded.width, loaded.height));
+    c = document.createElement("canvas");
+    c.width = Math.max(1, Math.round(loaded.width * scale));
+    c.height = Math.max(1, Math.round(loaded.height * scale));
+    const ctx = c.getContext("2d");
+    if (!ctx) return undefined;
     ctx.fillStyle = "#fff";
     ctx.fillRect(0, 0, c.width, c.height);
-    ctx.drawImage(bmp as CanvasImageSource, 0, 0, c.width, c.height);
+    ctx.drawImage(loaded.src, 0, 0, c.width, c.height);
     return c.toDataURL("image/jpeg", 0.7);
   } catch {
     return undefined;
+  } finally {
+    loaded?.close();
+    if (c) {
+      c.width = 0;
+      c.height = 0;
+    }
   }
+}
+
+/** Downscales large images inside a Web Worker when available; enforces pre-decode dimension bounds. */
+export async function compressImage(blob: Blob, mime: string, maxDim = 2400): Promise<Blob> {
+  const struct = await validateBlobStructure(blob, "image", mime);
+  if (!struct.ok) throw new Error(struct.reason);
+  if (typeof OffscreenCanvas !== "undefined") {
+    return runWorker(
+      (id) => ({ id, op: "compressImage", blob, mime, maxDim }),
+      () => compressImageFallback(blob, mime, maxDim)
+    );
+  }
+  return compressImageFallback(blob, mime, maxDim);
+}
+
+/** Creates a small JPEG data URL thumbnail from an image blob inside a Web Worker when available. */
+export async function imageThumb(blob: Blob, size = 240): Promise<string | undefined> {
+  if (typeof OffscreenCanvas !== "undefined") {
+    return runWorker(
+      (id) => ({ id, op: "imageThumb", blob, size }),
+      () => imageThumbFallback(blob, size)
+    );
+  }
+  return imageThumbFallback(blob, size);
 }
 
 /** Compresses a cover image to a small data URL. */

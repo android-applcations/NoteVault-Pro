@@ -1,6 +1,7 @@
 // Application services – bibliographic references (user supplied data only).
 import { db } from "@/data/db";
 import type { Reference } from "@/data/types";
+import { safeUrl } from "@/domain/sanitize";
 import { logActivity, uid } from "./core";
 import { reindex } from "./search";
 
@@ -13,6 +14,7 @@ export const emptyRef = (): RefInput => ({
 function validate(r: RefInput) {
   if (!r.title.trim()) throw new Error("NAME_REQUIRED");
   if (r.year && !/^\d{4}[a-z]?$/.test(r.year.trim())) throw new Error("BAD_YEAR");
+  if (r.url && r.url.trim() && !safeUrl(r.url)) throw new Error("BAD_URL");
 }
 
 export async function saveReference(input: RefInput, id?: string): Promise<Reference> {

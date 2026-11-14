@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { db } from "@/data/db";
 import type { Lecture } from "@/data/types";
+import { safeCssColor, safeDataImageUrl } from "@/domain/sanitize";
 import { softDelete } from "@/services/core";
 import { addWeek, duplicateLecture, getSubjectStats, moveLecture, renameWeek, updateLecture } from "@/services/library";
 import { ActionMenu } from "@/ui/ActionMenu";
@@ -83,12 +84,14 @@ export default function SubjectPage() {
   const weekNums = Array.from(new Set([...subject.weeks.map((w) => w.n), ...lectures.map((l) => l.week)])).sort((a, b) => a - b);
   const item = (l: Lecture, v: View) => <LectureItem key={l.id} l={l} view={v} onEdit={(lecture) => setLecForm({ open: true, lecture })} onMove={(lec) => { setMoving(lec); setMoveWeek(lec.week); }} />;
   const recentNotes = [...notes].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 5);
+  const coverUrl = safeDataImageUrl(subject.cover);
+  const safeColor = safeCssColor(subject.color);
 
   return (
     <div>
       <Link to="/subjects" className="mb-3 inline-flex items-center gap-1 text-sm font-bold text-muted hover:text-fg"><ArrowRight size={14} className="ltr:rotate-180" />{t("المواد", "Subjects")}</Link>
       <div className="card-surface mb-5 overflow-hidden">
-        <div className="relative h-28 sm:h-36" style={{ background: subject.cover ? `url(${subject.cover}) center/cover` : `linear-gradient(135deg, ${subject.color}, ${subject.color}66)` }}>
+        <div className="relative h-28 sm:h-36" style={{ background: coverUrl ? `url(${coverUrl}) center/cover` : `linear-gradient(135deg, ${safeColor}, ${safeColor}66)` }}>
           <div className="absolute end-3 top-3"><Button onClick={() => setEditSubject(true)}><Pencil size={15} />{t("تعديل", "Edit")}</Button></div>
         </div>
         <div className="p-5">
@@ -148,7 +151,7 @@ export default function SubjectPage() {
           {view === "timeline" && (
             <ol className="relative ms-3 space-y-4 border-s-2 border-line ps-6">
               {[...visible].sort((a, b) => a.date.localeCompare(b.date)).map((l) => (
-                <li key={l.id} className="relative"><span className="absolute -start-[31px] top-4 h-3 w-3 rounded-full border-2 border-bg" style={{ background: subject.color }} /><div className="mb-1 text-xs font-bold text-muted">{fmtDate(l.date, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</div>{item(l, "timeline")}</li>
+                <li key={l.id} className="relative"><span className="absolute -start-[31px] top-4 h-3 w-3 rounded-full border-2 border-bg" style={{ background: safeColor }} /><div className="mb-1 text-xs font-bold text-muted">{fmtDate(l.date, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</div>{item(l, "timeline")}</li>
               ))}
             </ol>
           )}

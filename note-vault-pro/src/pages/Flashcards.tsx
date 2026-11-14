@@ -8,6 +8,7 @@ import { normalize } from "@/domain/text";
 import { createDeck, deleteCard, deleteDeck, getReviewStats, updateDeck } from "@/services/cards";
 import { useApp } from "@/ui/app-context";
 import { CardEditor } from "@/ui/CardEditor";
+import { FormulaText } from "@/ui/FormulaView";
 import { useI18n } from "@/ui/i18n";
 import { Badge, Button, EmptyState, Field, Input, Modal, PageHeader, Select } from "@/ui/kit";
 import { Tabs, useIncremental, useSubjects } from "@/ui/shared";
@@ -89,7 +90,7 @@ export default function Flashcards() {
           {cards && list.length === 0 ? <EmptyState icon={<Layers />} title={t("لا توجد بطاقات", "No cards")} /> : (
             <div className="grid gap-2 md:grid-cols-2">{shown.map((c) => (
               <div key={c.id} className="card-surface p-3">
-                <div className="flex items-start gap-2"><div className="min-w-0 flex-1"><div className="line-clamp-2 font-bold" dir="auto">{c.front || "—"}</div><div className="line-clamp-1 text-sm text-muted" dir="auto">{c.back}</div></div>
+                <div className="flex items-start gap-2"><div className="min-w-0 flex-1"><div className="line-clamp-2 font-bold" dir="auto"><FormulaText text={c.front || "—"} /></div><div className="line-clamp-1 text-sm text-muted" dir="auto"><FormulaText text={c.back} /></div></div>
                   <Button variant="ghost" className="!px-2" aria-label={t("تعديل", "Edit")} onClick={() => setEdit(c)}><Pencil size={15} /></Button>
                   <Button variant="ghost" className="!px-2" aria-label={t("حذف", "Delete")} onClick={async () => { if (await confirm({ title: t("حذف البطاقة؟", "Delete this card?"), message: t("سيُحذف سجل مراجعتها أيضاً.", "Its review history is deleted too."), danger: true })) { await deleteCard(c.id); toast(t("تم الحذف", "Deleted")); } }}><Trash2 size={15} className="text-danger" /></Button></div>
                 <div className="mt-2 flex flex-wrap gap-1.5 text-xs"><Badge>{deckName.get(c.deckId)}</Badge><Badge>{states[c.state]}</Badge><Badge color="#15803d">✓ {c.successCount}</Badge><Badge color="#c42a3b">✗ {c.failCount}</Badge><span className="text-muted">{t("القادمة", "Next")}: {fmtDate(c.due, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span></div>

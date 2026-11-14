@@ -3,6 +3,7 @@ import { Archive, ArchiveRestore, CalendarRange, Plus, Trash2 } from "lucide-rea
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { db } from "@/data/db";
+import { safeCssColor } from "@/domain/sanitize";
 import { todayISO } from "@/domain/text";
 import { errMsg } from "@/services/core";
 import { createSemester, deleteSemester, updateSemester } from "@/services/library";
@@ -44,7 +45,7 @@ export default function Semesters() {
               <div className="mt-3 flex flex-wrap gap-2">
                 {subs.map((x) => (
                   <span key={x.id} className="flex items-center gap-1 rounded-xl border border-line bg-surface2 ps-3 pe-1 py-1 text-sm font-bold">
-                    <Link to={`/subjects/${x.id}`} style={{ color: x.color }}>{x.name}</Link>
+                    <Link to={`/subjects/${x.id}`} style={{ color: safeCssColor(x.color) }}>{x.name}</Link>
                   </span>
                 ))}
                 {subs.length === 0 && <span className="text-sm text-muted">{t("لا توجد مواد في هذا الفصل", "No subjects in this semester")}</span>}

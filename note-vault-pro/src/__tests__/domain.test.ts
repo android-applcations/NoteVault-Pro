@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { formatCitation, citationToPlain } from "@/domain/citations";
 import { clozeBlanks, gradeQuestion, summarize, sentenceToCloze } from "@/domain/quiz";
-import { sanitizeDoc, safeUrl } from "@/domain/sanitize";
+import { sanitizeDoc, safeCssColor, safeCssSize, safeDataImageUrl, safeHexColor, safeUrl } from "@/domain/sanitize";
 import { applyReview, newSrsState, previewIntervals } from "@/domain/srs";
 import { makeSnippet, normalize, plainFromDoc, queryTerms } from "@/domain/text";
 import type { QuizQuestion, Reference } from "@/data/types";
@@ -47,6 +47,19 @@ describe("sanitizeDoc", () => {
     expect(safeUrl("data:text/html,<script>")).toBeNull();
     expect(safeUrl("JaVaScRiPt:alert(1)")).toBeNull();
     expect(safeUrl("/relative")).toBeNull();
+  });
+  it("sanitizes CSS colors, sizes, and rejects data:image/svg+xml covers", () => {
+    expect(safeCssColor("#4f46e5")).toBe("#4f46e5");
+    expect(safeCssColor("rgba(10, 20, 30, 0.5)")).toBe("rgba(10, 20, 30, 0.5)");
+    expect(safeCssColor("red; background-image: url(https://evil.com)")).toBe("#6366f1");
+    expect(safeCssColor("expression(alert(1))")).toBe("#6366f1");
+    expect(safeHexColor("#ff00aa")).toBe("#ff00aa");
+    expect(safeHexColor("red")).toBe("#6366f1");
+    expect(safeCssSize("16px")).toBe("16px");
+    expect(safeCssSize("16px; color: red")).toBeNull();
+    expect(safeDataImageUrl("data:image/png;base64,iVBORw0KGgo=")).toBe("data:image/png;base64,iVBORw0KGgo=");
+    expect(safeDataImageUrl("data:image/svg+xml;base64,PHN2Zz4=")).toBeNull();
+    expect(safeDataImageUrl('data:image/jpeg;base64,AAAA") ; background: url(evil)')).toBeNull();
   });
 });
 

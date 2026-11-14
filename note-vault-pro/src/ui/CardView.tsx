@@ -3,6 +3,7 @@ import { db } from "@/data/db";
 import type { Flashcard } from "@/data/types";
 import { parseCloze } from "@/domain/quiz";
 import { useLiveQuery } from "dexie-react-hooks";
+import { FormulaText, FormulaView } from "./FormulaView";
 import { useI18n } from "./i18n";
 import { useBlobUrl } from "./shared";
 
@@ -30,7 +31,7 @@ export function CardView({ card, revealed }: { card: Flashcard; revealed: boolea
     );
     if (revealed && back) answer = <p className="text-sm text-muted" dir="auto">{back}</p>;
   } else {
-    front = <p className="whitespace-pre-wrap text-xl font-bold leading-9" dir="auto">{card.type === "multiface" ? card.front : card.front}</p>;
+    front = <p className="whitespace-pre-wrap text-xl font-bold leading-9" dir="auto"><FormulaText text={card.front} /></p>;
     if (revealed) {
       if (card.type === "compare") {
         const rows = back.split("\n").map((r) => r.split("|").map((x) => x.trim()));
@@ -38,11 +39,11 @@ export function CardView({ card, revealed }: { card: Flashcard; revealed: boolea
       } else if (card.type === "imagelabel") {
         answer = <ol className="mx-auto max-w-md list-decimal space-y-1 ps-6 text-start text-base" dir="auto">{card.faces.map((f, i) => <li key={i}>{f}</li>)}</ol>;
       } else if (card.type === "multiface") {
-        answer = <div className="space-y-2">{card.faces.map((f, i) => <div key={i} className="rounded-xl bg-surface2 p-3 text-base" dir="auto">{f}</div>)}{back && <p className="text-sm text-muted" dir="auto">{back}</p>}</div>;
+        answer = <div className="space-y-2">{card.faces.map((f, i) => <div key={i} className="rounded-xl bg-surface2 p-3 text-base" dir="auto"><FormulaText text={f} /></div>)}{back && <p className="text-sm text-muted" dir="auto"><FormulaText text={back} /></p>}</div>;
       } else if (card.type === "formula") {
-        answer = <div className="ltr-iso rounded-xl bg-primary/10 p-4 font-serif text-xl italic">{back}</div>;
+        answer = <div className="ltr-iso rounded-xl bg-primary/10 p-4 text-xl"><FormulaView tex={back} displayMode /></div>;
       } else {
-        answer = <p className="whitespace-pre-wrap text-lg" dir="auto">{back}</p>;
+        answer = <p className="whitespace-pre-wrap text-lg" dir="auto"><FormulaText text={back} /></p>;
       }
     }
   }
