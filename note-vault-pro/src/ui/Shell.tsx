@@ -120,7 +120,7 @@ export function Shell({ children }: { children: ReactNode }) {
             <IconButton label={t("تبديل المظهر", "Toggle theme")} onClick={() => setPrefs({ theme: dark ? "light" : "dark" })}>{dark ? <Sun size={18} /> : <Moon size={18} />}</IconButton>
           </div>
         </header>
-        <main id="main" tabIndex={-1} className={cn("mx-auto w-full px-4 pb-28 pt-5 sm:px-6 lg:pb-10", isEditor ? "max-w-6xl" : "max-w-6xl")}>
+        <main id="main" tabIndex={-1} className={cn("mx-auto w-full px-4 pb-28 pt-5 sm:px-6 lg:pb-10", isEditor ? "max-w-7xl" : "max-w-6xl")}>
           {/* Keyed fade-in only: an exit animation would keep a second live copy of the outgoing page mounted */}
           <motion.div key={loc.pathname} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}>
             {children}

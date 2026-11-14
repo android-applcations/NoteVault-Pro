@@ -7,7 +7,7 @@ import { applyBackup, BackupError, exportBackup, exportNotesText, parseBackup, p
 import { db } from "@/data/db";
 import { DEFAULT_MAX_VERSIONS } from "@/services/notes";
 import { rebuildIndex } from "@/services/search";
-import { cleanPreviews, deleteUnlinkedFiles, getStorageReport, requestPersistence } from "@/services/storage";
+import { auditDatabaseIntegrity, cleanPreviews, cleanupOrphans, deleteUnlinkedFiles, getStorageReport, requestPersistence, type IntegrityReport } from "@/services/storage";
 import { useApp } from "@/ui/app-context";
 import { useI18n, type Prefs } from "@/ui/i18n";
 import { Badge, Button, Field, Input, Modal, PageHeader, ProgressBar, Select } from "@/ui/kit";
@@ -31,10 +31,12 @@ export default function Settings() {
   const report = useLiveQuery(getStorageReport, [reload]);
   const maxVersions = useLiveQuery(async () => ((await db.appSettings.get("maxVersions"))?.value as number) ?? DEFAULT_MAX_VERSIONS, []);
   const keepOriginal = useLiveQuery(async () => ((await db.appSettings.get("keepOriginalImages"))?.value as boolean) ?? false, []);
+  const pdfIndexLimit = useLiveQuery(async () => ((await db.appSettings.get("pdfIndexLimit"))?.value as number) ?? 1500, []);
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [parsed, setParsed] = useState<ParsedBackup | null>(null);
   const [mode, setMode] = useState<ImportMode>("merge");
+  const [integrity, setIntegrity] = useState<IntegrityReport | null>(null);
 
   const errText = (e: unknown) => {
     const c = e instanceof BackupError ? e.code : "";
@@ -73,7 +75,8 @@ export default function Settings() {
       <Section title={t("المحرر والملفات", "Editor & files")} icon={<RefreshCw size={18} />}>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label={t("عدد النسخ المحفوظة لكل ملاحظة", "Versions kept per note")}>{(id) => <Input id={id} type="number" min={1} max={200} value={maxVersions ?? DEFAULT_MAX_VERSIONS} onChange={(e) => db.appSettings.put({ key: "maxVersions", value: Math.min(200, Math.max(1, Number(e.target.value) || 1)) })} />}</Field>
-          <label className="flex items-center gap-2 self-end pb-2 text-sm font-bold"><input type="checkbox" className="h-4 w-4 accent-[var(--accent)]" checked={!!keepOriginal} onChange={(e) => db.appSettings.put({ key: "keepOriginalImages", value: e.target.checked })} />{t("الاحتفاظ بالصور الأصلية (دون ضغط)", "Keep original images (no compression)")}</label>
+          <Field label={t("حد صفحات فهرسة PDF لكل دفعة", "PDF pages indexed per batch")}>{(id) => <Input id={id} type="number" min={50} max={20000} step={50} value={pdfIndexLimit ?? 1500} onChange={(e) => db.appSettings.put({ key: "pdfIndexLimit", value: Math.min(20000, Math.max(50, Math.round(Number(e.target.value) || 1500))) })} />}</Field>
+          <label className="flex items-center gap-2 self-end pb-2 text-sm font-bold sm:col-span-2"><input type="checkbox" className="h-4 w-4 accent-[var(--accent)]" checked={!!keepOriginal} onChange={(e) => db.appSettings.put({ key: "keepOriginalImages", value: e.target.checked })} />{t("الاحتفاظ بالصور الأصلية (دون ضغط)", "Keep original images (no compression)")}</label>
         </div>
       </Section>
 
@@ -86,7 +89,38 @@ export default function Settings() {
             <Button onClick={async () => { const n = await cleanPreviews(); toast(t(`تم تنظيف ${n} معاينة (تُعاد عند الحاجة)`, `Cleared ${n} previews (regenerated on demand)`)); setReload((r) => r + 1); }}>{t("تنظيف المعاينات المؤقتة", "Clear temporary previews")}</Button>
             <Button disabled={!report.unlinked.count} onClick={async () => { if (await confirm({ title: t("حذف الملفات غير المرتبطة؟", "Delete unlinked files?"), message: t(`${report.unlinked.count} ملف (${formatBytes(report.unlinked.bytes)}) غير مرتبط بأي مادة أو محاضرة أو ملاحظة سيُحذف نهائياً.`, `${report.unlinked.count} file(s) (${formatBytes(report.unlinked.bytes)}) not linked to any subject, lecture or note will be deleted permanently.`), danger: true })) { const n = await deleteUnlinkedFiles(); toast(t(`حُذف ${n} ملف`, `${n} file(s) deleted`)); setReload((r) => r + 1); } }}>{t("حذف الملفات غير المرتبطة", "Delete unlinked files")} ({report.unlinked.count})</Button>
             <Button disabled={busy === "index"} onClick={async () => { setBusy("index"); await rebuildIndex(); setBusy(null); toast(t("تمت إعادة بناء فهرس البحث", "Search index rebuilt")); }}>{t("إعادة بناء فهرس البحث", "Rebuild search index")}</Button>
+            <Button disabled={busy === "audit"} onClick={async () => {
+              setBusy("audit");
+              try {
+                const res = await auditDatabaseIntegrity();
+                setIntegrity(res);
+                if (res.orphanBlobs === 0 && res.orphanRecords === 0 && res.missingBlobAttachments === 0) {
+                  toast(t("قاعدة البيانات سليمة — لا توجد بقايا تالفة", "Database healthy — 0 orphan records found"));
+                } else {
+                  toast(t(`عُثر على ${res.orphanBlobs} كتلة يتيمة و ${res.orphanRecords} سجل معلق`, `Found ${res.orphanBlobs} orphan blob(s) and ${res.orphanRecords} dangling record(s)`), "info");
+                }
+              } finally { setBusy(null); }
+            }}>{t("فحص سلامة قاعدة البيانات", "Check database integrity")}</Button>
+            {integrity && (integrity.orphanBlobs > 0 || integrity.orphanRecords > 0) && (
+              <Button variant="danger" disabled={busy === "cleanup"} onClick={async () => {
+                setBusy("cleanup");
+                try {
+                  const res = await cleanupOrphans();
+                  setIntegrity(await auditDatabaseIntegrity());
+                  setReload((r) => r + 1);
+                  toast(t(`تم تنظيف ${res.blobsRemoved} كتلة (${formatBytes(res.bytesReclaimed)}) و ${res.recordsRemoved} سجل يتيم`, `Cleaned ${res.blobsRemoved} blob(s) (${formatBytes(res.bytesReclaimed)}) and ${res.recordsRemoved} orphan record(s)`));
+                } finally { setBusy(null); }
+              }}>{t("تنظيف البقايا اليتيمة", "Clean orphan records")}</Button>
+            )}
           </div>
+          {integrity && (
+            <div className="mt-3 rounded-xl bg-surface2 p-3 text-xs text-muted">
+              {t(
+                `نتيجة الفحص: ${integrity.orphanBlobs} كتلة غير مرتبطة (${formatBytes(integrity.orphanBlobBytes)}) · ${integrity.orphanRecords} سجل يتيم · ${integrity.missingBlobAttachments} مرفق مفقود`,
+                `Integrity scan: ${integrity.orphanBlobs} orphan blob(s) (${formatBytes(integrity.orphanBlobBytes)}) · ${integrity.orphanRecords} orphan record(s) · ${integrity.missingBlobAttachments} missing attachment blob(s)`
+              )}
+            </div>
+          )}
           <p className="mt-3 text-xs text-muted">{t("لا يحذف التطبيق أي ملف تلقائياً بسبب امتلاء المساحة.", "The app never deletes your files automatically when space runs low.")}</p></>}
       </Section>
 
@@ -101,8 +135,17 @@ export default function Settings() {
       </Section>
 
       <Section title={t("التثبيت على الجهاز", "Install on your device")} icon={<Smartphone size={18} />}>
-        {inst.installed ? <Badge color="#15803d">{t("التطبيق مثبّت ✓", "App installed ✓")}</Badge> : inst.canInstall ? <Button variant="primary" onClick={() => void inst.install()}><Download size={16} />{t("تثبيت التطبيق", "Install app")}</Button> :
-          <p className="text-sm text-muted">{inst.ios ? t("على iPhone/iPad: اضغط زر المشاركة ثم «إضافة إلى الشاشة الرئيسية».", "On iPhone/iPad: tap Share, then “Add to Home Screen”.") : t("استخدم قائمة المتصفح ← «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية». بعد التحميل الأول يعمل دون اتصال.", "Use the browser menu → “Install app” or “Add to Home Screen”. After the first load it works offline.")}</p>}
+        {inst.installed ? (
+          <Badge color="#15803d">{t("التطبيق مثبّت ✓", "App installed ✓")}</Badge>
+        ) : inst.canInstall ? (
+          <Button variant="primary" onClick={() => void inst.install()}><Download size={16} />{t("تثبيت التطبيق", "Install app")}</Button>
+        ) : inst.ios ? (
+          <p className="text-sm text-muted">{t("على iPhone/iPad (Safari): اضغط زر المشاركة ⬆ ثم «إضافة إلى الشاشة الرئيسية».", "On iPhone/iPad (Safari): tap Share ⬆, then “Add to Home Screen”.")}</p>
+        ) : inst.android ? (
+          <p className="text-sm text-muted">{t("على Android (Chrome): افتح قائمة المتصفح (⋮) ثم «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية». بعد التحميل الأول يعمل دون اتصال.", "On Android (Chrome): open the browser menu (⋮) → “Install app” or “Add to Home Screen”. After the first load it works offline.")}</p>
+        ) : (
+          <p className="text-sm text-muted">{t("على سطح المكتب: اضغط أيقونة التثبيت في شريط العنوان أو قائمة المتصفح ← «تثبيت NoteVault Pro». بعد التحميل الأول يعمل دون اتصال.", "On desktop: click the install icon in the address bar or browser menu → “Install NoteVault Pro”. After the first load it works offline.")}</p>
+        )}
       </Section>
 
       <Section title={t("الخصوصية", "Privacy")} icon={<ShieldCheck size={18} />}>

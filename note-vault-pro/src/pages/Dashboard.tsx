@@ -3,6 +3,7 @@ import { motion } from "motion/react";
 import { BookOpen, ClipboardCheck, Clock, FileText, FolderOpen, Layers, NotebookText, Play, Plus, Sparkles, Zap, Activity as ActIcon } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { db } from "@/data/db";
+import { safeCssColor, safeDataImageUrl } from "@/domain/sanitize";
 import { formatBytes } from "@/domain/text";
 import { getDashboard } from "@/services/stats";
 import { getStorageReport } from "@/services/storage";
@@ -92,12 +93,16 @@ export default function Dashboard() {
       <section>
         <div className="mb-3 flex items-center justify-between"><h2 className="text-lg font-extrabold">{t("المواد الدراسية", "Subjects")}</h2><Link to="/subjects" className="text-sm font-bold text-accent">{t("عرض الكل", "View all")}</Link></div>
         <div className="flex gap-3 overflow-x-auto pb-2">
-          {subjects.slice(0, 10).map((s) => (
-            <Link key={s.id} to={`/subjects/${s.id}`} className="card-surface w-44 shrink-0 overflow-hidden transition hover:-translate-y-0.5">
-              <div className="h-16" style={{ background: s.cover ? `url(${s.cover}) center/cover` : `linear-gradient(135deg, ${s.color}, ${s.color}88)` }} />
-              <div className="p-3"><div className="truncate text-sm font-extrabold">{s.name}</div><div className="truncate text-xs text-muted" dir="auto">{s.code || "—"}</div></div>
-            </Link>
-          ))}
+          {subjects.slice(0, 10).map((s) => {
+            const coverUrl = safeDataImageUrl(s.cover);
+            const color = safeCssColor(s.color);
+            return (
+              <Link key={s.id} to={`/subjects/${s.id}`} className="card-surface w-44 shrink-0 overflow-hidden transition hover:-translate-y-0.5">
+                <div className="h-16" style={{ background: coverUrl ? `url(${coverUrl}) center/cover` : `linear-gradient(135deg, ${color}, ${color}88)` }} />
+                <div className="p-3"><div className="truncate text-sm font-extrabold">{s.name}</div><div className="truncate text-xs text-muted" dir="auto">{s.code || "—"}</div></div>
+              </Link>
+            );
+          })}
           {subjects.length === 0 && <p className="text-sm text-muted">{t("لا توجد مواد بعد.", "No subjects yet.")}</p>}
         </div>
       </section>
@@ -131,7 +136,7 @@ export default function Dashboard() {
           <h2 className="mb-3 text-lg font-extrabold">{t("المواد الأكثر نشاطاً", "Most active subjects")}</h2>
           <ul className="space-y-2">
             {d.topSubjects.map(({ subject, score }) => (
-              <li key={subject.id} className="flex items-center gap-3"><span className="h-3 w-3 rounded-full" style={{ background: subject.color }} />
+              <li key={subject.id} className="flex items-center gap-3"><span className="h-3 w-3 rounded-full" style={{ background: safeCssColor(subject.color) }} />
                 <Link to={`/subjects/${subject.id}`} className="flex-1 truncate text-sm font-bold hover:text-accent">{subject.name}</Link><Badge>{fmtNum(score)}</Badge></li>
             ))}
             {d.topSubjects.length === 0 && <li className="text-sm text-muted">—</li>}

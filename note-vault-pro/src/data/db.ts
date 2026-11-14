@@ -2,7 +2,7 @@
 import Dexie, { type Table } from "dexie";
 import type * as T from "./types";
 
-export const DATA_VERSION = 1;
+export const DATA_VERSION = 2;
 
 export class VaultDB extends Dexie {
   semesters!: Table<T.Semester, string>;
@@ -60,6 +60,45 @@ export class VaultDB extends Dexie {
       trashItems: "id, kind, deletedAt",
       events: "id, date, subjectId",
     });
+
+    this.version(2)
+      .stores({
+        semesters: "id, archived, startDate, updatedAt",
+        subjects: "id, semesterId, archived, deletedAt, trashId, updatedAt",
+        lectures: "id, subjectId, week, date, archived, deletedAt, trashId, updatedAt",
+        notes: "id, subjectId, lectureId, kind, pinned, favorite, archived, deletedAt, trashId, updatedAt",
+        noteVersions: "id, noteId, createdAt",
+        attachments: "id, subjectId, lectureId, noteId, blobId, hash, kind, category, size, deletedAt, trashId, createdAt",
+        blobs: "id",
+        pdfDocuments: "id, indexStatus",
+        bookmarks: "id, attachmentId",
+        highlights: "id, attachmentId",
+        annotations: "id, attachmentId",
+        flashcardDecks: "id, subjectId",
+        flashcards: "id, deckId, subjectId, due, state, imageId",
+        reviewLogs: "id, cardId, reviewedAt",
+        quizzes: "id, subjectId, semesterId",
+        quizQuestions: "id, quizId",
+        quizAttempts: "id, quizId, finishedAt",
+        references: "id, subjectId, type",
+        tags: "id, &name",
+        noteTags: "id, noteId, tagId, [noteId+tagId]",
+        searchIndex: "id, kind, refId, subjectId",
+        activities: "id, createdAt",
+        appSettings: "key",
+        trashItems: "id, kind, deletedAt",
+        events: "id, date, subjectId",
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table("pdfDocuments")
+          .toCollection()
+          .modify((doc: T.PdfDocument) => {
+            if (!doc.indexStatus) doc.indexStatus = doc.indexed ? "done" : "idle";
+            if (typeof doc.indexedPages !== "number") doc.indexedPages = doc.indexed ? doc.pages : 0;
+          });
+        await tx.table("appSettings").put({ key: "schemaVersion", value: 2 });
+      });
   }
 }
 

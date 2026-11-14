@@ -76,6 +76,8 @@ export function useFailureText() {
       case "mismatch": return t("محتوى الملف لا يطابق نوعه", "File content does not match its type");
       case "binary_text": return t("الملف النصي يحتوي بيانات ثنائية", "Text file contains binary data");
       case "bad_encoding": return t("ترميز النص غير صالح (UTF-8)", "Invalid text encoding (UTF-8 required)");
+      case "dimensions": return t("أبعاد الصورة كبيرة جداً أو تتجاوز الحد المسموح", "Image dimensions are too large or exceed safe limits");
+      case "corrupt": return t("الملف تالف أو بنيته غير صالحة", "File is corrupted or has invalid structure");
       case "quota": return t("مساحة التخزين ممتلئة", "Storage is full");
       default: return t("تعذر حفظ الملف", "Could not save the file");
     }

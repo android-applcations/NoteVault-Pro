@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { db } from "@/data/db";
 import type { Subject } from "@/data/types";
+import { safeCssColor, safeDataImageUrl } from "@/domain/sanitize";
 import { coverFromFile } from "@/files/validate";
 import { errMsg, softDelete } from "@/services/core";
 import { createSubject, getSubjectStats, subjectColors, updateSubject } from "@/services/library";
@@ -52,7 +53,11 @@ export function SubjectForm({ open, onClose, subject }: { open: boolean; onClose
         <div className="sm:col-span-2">
           <span className="text-xs font-semibold text-muted">{t("صورة الغلاف", "Cover image")}</span>
           <div className="mt-1.5 flex items-center gap-3">
-            <div className="h-16 w-28 rounded-xl border border-line" style={{ background: f.cover ? `url(${f.cover}) center/cover` : `linear-gradient(135deg, ${f.color}, ${f.color}88)` }} />
+            {(() => {
+              const coverUrl = safeDataImageUrl(f.cover);
+              const color = safeCssColor(f.color);
+              return <div className="h-16 w-28 rounded-xl border border-line" style={{ background: coverUrl ? `url(${coverUrl}) center/cover` : `linear-gradient(135deg, ${color}, ${color}88)` }} />;
+            })()}
             <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-line bg-surface2 px-3 py-2 text-sm font-semibold hover:bg-line/60">
               <ImagePlus size={16} />{t("اختيار صورة", "Choose image")}
               <input type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" onChange={async (e) => { const file = e.target.files?.[0]; if (file) { const c = await coverFromFile(file); if (c) setF((p) => ({ ...p, cover: c })); else toast(t("صورة غير صالحة", "Invalid image"), "err"); } }} />
@@ -71,10 +76,12 @@ function SubjectCard({ s, onEdit }: { s: Subject; onEdit: (s: Subject) => void }
   const { toast, confirm } = useApp();
   const stats = useLiveQuery(() => getSubjectStats(s.id), [s.id]);
   const semester = useLiveQuery(() => (s.semesterId ? db.semesters.get(s.semesterId) : undefined), [s.semesterId]);
+  const coverUrl = safeDataImageUrl(s.cover);
+  const color = safeCssColor(s.color);
   return (
     <motion.div layout initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="card-surface relative overflow-hidden">
       <Link to={`/subjects/${s.id}`} className="block">
-        <div className="h-24" style={{ background: s.cover ? `url(${s.cover}) center/cover` : `linear-gradient(135deg, ${s.color}, ${s.color}77)` }} />
+        <div className="h-24" style={{ background: coverUrl ? `url(${coverUrl}) center/cover` : `linear-gradient(135deg, ${color}, ${color}77)` }} />
         <div className="p-4">
           <div className="flex items-center gap-2"><h3 className="truncate text-lg font-extrabold" dir="auto">{s.name}</h3>{s.archived && <Badge>{t("مؤرشفة", "Archived")}</Badge>}</div>
           <p className="truncate text-xs text-muted" dir="auto">{[s.code, s.teacher, semester?.name].filter(Boolean).join(" · ") || "—"}</p>
