@@ -1,15 +1,18 @@
 // Lecture audio recording studio + crash recovery + recordings list + player + offline transcription.
 import { useLiveQuery } from "dexie-react-hooks";
 import {
-  AlertTriangle, Check, Edit3, FileAudio, Mic, NotebookPen, Pause, Play,
-  RotateCcw, Square, Trash2, Volume2,
+  AlertTriangle, Check, Edit3, ExternalLink, FileAudio, Mic, NotebookPen, Pause, Play,
+  RotateCcw, ShieldAlert, Square, Trash2, Upload, Volume2,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { ensureRecordingForAudioAttachment } from "@/asr/asrClient";
 import { db } from "@/data/db";
 import type { Attachment, LectureRecording, Note } from "@/data/types";
 import { formatBytes, formatDuration } from "@/domain/text";
+import { addFile } from "@/services/files";
 import { createNote } from "@/services/notes";
+import { permissionManager } from "@/services/permissions";
 import { lectureRecorder } from "@/services/recorder";
 import {
   addRecordingMarker,
@@ -74,6 +77,27 @@ export function LectureRecorderPanel({ lectureId, subjectId, lectureTitle }: Lec
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameVal, setRenameVal] = useState("");
   const [markerText, setMarkerText] = useState("");
+  const [requestingPerm, setRequestingPerm] = useState(false);
+  const [importingAudio, setImportingAudio] = useState(false);
+  const [caps, setCaps] = useState(() => permissionManager.getSnapshot());
+  const audioFileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const unsub = permissionManager.subscribe(setCaps);
+    void permissionManager.refreshAll();
+    const sync = () => {
+      if (document.visibilityState !== "hidden") {
+        void permissionManager.refreshAll();
+      }
+    };
+    window.addEventListener("focus", sync);
+    document.addEventListener("visibilitychange", sync);
+    return () => {
+      unsub();
+      window.removeEventListener("focus", sync);
+      document.removeEventListener("visibilitychange", sync);
+    };
+  }, []);
 
   useEffect(() => {
     if (recordings.length > 0 && (!selectedId || !recordings.some((r) => r.id === selectedId))) {
@@ -92,15 +116,65 @@ export function LectureRecorderPanel({ lectureId, subjectId, lectureTitle }: Lec
   const recordingPhaseActive =
     recorder.phase === "recording" ||
     recorder.phase === "paused" ||
-    recorder.phase === "saving" ||
-    recorder.phase === "requesting_mic";
+    recorder.phase === "saving";
+  const requestingHere =
+    recorder.phase === "requesting_mic" &&
+    (lectureId ? recorder.lectureId === lectureId : !recorder.lectureId);
   const activeHere =
     recordingPhaseActive && (lectureId ? recorder.lectureId === lectureId : !recorder.lectureId);
   const activeElsewhere =
-    (recorder.phase === "recording" || recorder.phase === "paused" || recorder.phase === "saving") &&
-    !activeHere;
+    recordingPhaseActive && !activeHere;
 
   const baseTitle = lectureTitle?.trim() || t("محاضرة", "Lecture");
+  const isInAppBrowser = caps.isInAppBrowser;
+  const isEmbedded = caps.isEmbedded;
+  const isInsecure = !caps.isSecureContext;
+
+  const handleRequestPermission = async () => {
+    setRequestingPerm(true);
+    try {
+      await lectureRecorder.requestMicrophoneAccess();
+      toast(t("تم تفعيل الميكروفون بنجاح", "Microphone access enabled"));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg === "MIC_IFRAME_BLOCKED") {
+        toast(t("افتح التطبيق في نافذة مستقلة لتفعيل الميكروفون.", "Open the app in a separate window to enable the microphone."), "err");
+      } else if (msg === "MIC_INSECURE_CONTEXT") {
+        toast(t("يلزم فتح التطبيق عبر اتصال آمن لتشغيل الميكروفون.", "A secure connection is required to use the microphone."), "err");
+      } else if (msg === "MIC_PERMISSION_DENIED") {
+        toast(t("لم يتم السماح باستخدام الميكروفون. يمكنك تفعيل الإذن من إعدادات التطبيق في جهازك.", "Microphone access was denied. Enable it in your device or app settings."), "err");
+      } else {
+        toast(t("تعذر الوصول إلى الميكروفون", "Could not access the microphone"), "err");
+      }
+    } finally {
+      setRequestingPerm(false);
+    }
+  };
+
+  const handleImportAudio = async (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file) return;
+    setImportingAudio(true);
+    try {
+      const res = await addFile(file, { subjectId, lectureId }, { category: "lecture" });
+      if (!res.ok || !res.attachment) {
+        toast(t("يرجى اختيار ملف صوتي صالح (MP3 / M4A / WAV / WebM)", "Please choose a valid audio file"), "err");
+        return;
+      }
+      if (res.attachment.kind !== "audio") {
+        toast(t("الملف المحدد ليس ملفاً صوتياً", "Selected file is not an audio file"), "err");
+        return;
+      }
+      const recId = await ensureRecordingForAudioAttachment(res.attachment.id);
+      setSelectedId(recId);
+      toast(t("تم استيراد التسجيل الصوتي بنجاح", "Audio recording imported"));
+    } catch {
+      toast(t("تعذر استيراد الملف الصوتي", "Could not import audio file"), "err");
+    } finally {
+      setImportingAudio(false);
+      if (audioFileRef.current) audioFileRef.current.value = "";
+    }
+  };
 
   const handleStartRecording = async () => {
     const label = titleInput.trim() || `${baseTitle} — ${t("تسجيل", "Recording")} ${recordings.length + 1}`;
@@ -111,9 +185,17 @@ export function LectureRecorderPanel({ lectureId, subjectId, lectureTitle }: Lec
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (msg === "MIC_PERMISSION_DENIED") {
-        toast(t("يرجى السماح بالوصول إلى الميكروفون من إعدادات الجهاز.", "Microphone access is required. Allow mic permission in device settings."), "err");
+        toast(t("لم يتم السماح باستخدام الميكروفون. يمكنك تفعيل الإذن من إعدادات التطبيق في جهازك.", "Microphone access was denied. Enable it in your device or app settings."), "err");
+      } else if (msg === "MIC_IFRAME_BLOCKED") {
+        toast(t("افتح التطبيق في نافذة مستقلة لتفعيل الميكروفون.", "Open the app in a separate window to use the microphone."), "err");
+      } else if (msg === "MIC_INSECURE_CONTEXT") {
+        toast(t("يتطلب تسجيل الصوت فتح التطبيق عبر اتصال آمن.", "Audio recording requires a secure connection."), "err");
+      } else if (msg === "MIC_IN_USE") {
+        toast(t("الميكروفون قيد الاستخدام حالياً في تطبيق أو مكالمة أخرى.", "Microphone is currently in use by another app or call."), "err");
+      } else if (msg === "MIC_NOT_FOUND") {
+        toast(t("لم يتم العثور على ميكروفون متصل بهذا الجهاز.", "No microphone was found on this device."), "err");
       } else if (msg === "MIC_UNSUPPORTED") {
-        toast(t("التسجيل الصوتي غير متاح حالياً.", "Microphone recording is currently unavailable."), "err");
+        toast(t("التسجيل الصوتي المباشر غير متاح على هذا الجهاز.", "Live audio recording is unavailable on this device."), "err");
       } else if (msg === "QUOTA_EXCEEDED") {
         toast(t("مساحة التخزين غير كافية لتسجيل الصوت.", "Not enough storage space to record audio."), "err");
       } else {
@@ -251,9 +333,13 @@ export function LectureRecorderPanel({ lectureId, subjectId, lectureTitle }: Lec
             </div>
           </div>
 
-          {!recorder.micSupported && (
+          {!recorder.micSupported ? (
             <Badge color="#c42a3b">{t("الميكروفون غير متاح", "Mic unavailable")}</Badge>
-          )}
+          ) : recorder.permissionState === "denied" || recorder.error === "MIC_PERMISSION_DENIED" ? (
+            <Badge color="#c42a3b">{t("الإذن مرفوض", "Mic blocked")}</Badge>
+          ) : recorder.permissionState === "granted" ? (
+            <Badge color="#0b8579">{t("الميكروفون جاهز", "Mic ready")}</Badge>
+          ) : null}
         </div>
 
         {activeElsewhere && (
@@ -277,13 +363,168 @@ export function LectureRecorderPanel({ lectureId, subjectId, lectureTitle }: Lec
             />
             <Button
               variant="primary"
-              disabled={!recorder.micSupported}
+              disabled={requestingHere}
               onClick={() => void handleStartRecording()}
             >
-              <Mic size={16} /> {t("بدء تسجيل المحاضرة", "Record Lecture")}
+              <Mic size={16} />{" "}
+              {requestingHere
+                ? t("جاري طلب إذن الميكروفون…", "Requesting mic permission…")
+                : t("بدء تسجيل المحاضرة", "Record Lecture")}
             </Button>
+            <Button
+              variant="ghost"
+              disabled={importingAudio}
+              onClick={() => audioFileRef.current?.click()}
+            >
+              <Upload size={15} /> {importingAudio ? t("جاري الاستيراد…", "Importing…") : t("استيراد صوت", "Import audio")}
+            </Button>
+            <input
+              ref={audioFileRef}
+              type="file"
+              accept="audio/*"
+              className="hidden"
+              onChange={(e) => void handleImportAudio(e.target.files)}
+            />
           </div>
         )}
+
+        {!activeHere &&
+          !activeElsewhere &&
+          !recorder.error &&
+          recorder.micSupported &&
+          recorder.permissionState !== "granted" &&
+          recorder.permissionState !== "denied" &&
+          !isInsecure &&
+          !isInAppBrowser &&
+          !isEmbedded && (
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/25 bg-primary/5 p-3.5 text-sm">
+              <div className="min-w-0 flex-1">
+                <div className="font-extrabold">{t("تفعيل الميكروفون", "Enable Microphone")}</div>
+                <p className="text-xs text-muted">
+                  {t("يحتاج مسجل المحاضرات إلى الميكروفون لتسجيل صوت المحاضرة.", "The lecture recorder needs the microphone to record lecture audio.")}
+                </p>
+              </div>
+              <Button
+                variant="accent"
+                className="h-9 text-xs"
+                disabled={requestingPerm || requestingHere}
+                onClick={() => void handleRequestPermission()}
+              >
+                <Mic size={14} /> {requestingPerm ? t("جارٍ الطلب…", "Requesting…") : t("السماح بالوصول", "Allow access")}
+              </Button>
+            </div>
+          )}
+
+        {(recorder.error ||
+          recorder.permissionState === "denied" ||
+          !recorder.micSupported ||
+          isInsecure ||
+          isInAppBrowser ||
+          isEmbedded) &&
+          !activeHere && (
+            <div
+              role="alert"
+              className="mt-4 rounded-2xl border border-warn/40 bg-warn/10 p-4 text-sm"
+            >
+              <div className="flex items-start gap-2.5">
+                <ShieldAlert size={18} className="mt-0.5 shrink-0 text-warn" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="font-extrabold">
+                    {recorder.error === "MIC_INSECURE_CONTEXT" || isInsecure
+                      ? t("يلزم اتصال آمن لتفعيل الميكروفون", "A secure connection is required for the microphone")
+                      : recorder.error === "MIC_IFRAME_BLOCKED" || isEmbedded
+                        ? t("افتح التطبيق في نافذة مستقلة لتفعيل الميكروفون", "Open the app in a full window to use the microphone")
+                        : isInAppBrowser
+                          ? t("افتح التطبيق في المتصفح الرئيسي لتفعيل الميكروفون", "Open in your main browser to allow microphone access")
+                          : recorder.error === "MIC_REVOKED_MID_RECORDING"
+                            ? t("انقطع الاتصال بالميكروفون أثناء التسجيل", "Microphone disconnected during recording")
+                            : recorder.error === "MIC_IN_USE"
+                              ? t("الميكروفون مشغول بتطبيق آخر", "Microphone is busy in another app")
+                              : recorder.error === "MIC_NOT_FOUND"
+                                ? t("لم يتم العثور على ميكروفون متصل", "No microphone detected")
+                                : !recorder.micSupported || recorder.error === "MIC_UNSUPPORTED"
+                                  ? t("التسجيل المباشر غير متاح على هذا الجهاز", "Direct microphone recording is unavailable here")
+                                  : t("لم يتم السماح باستخدام الميكروفون", "Microphone access is not enabled")}
+                  </div>
+                  <p className="text-xs leading-relaxed text-muted">
+                    {recorder.error === "MIC_INSECURE_CONTEXT" || isInsecure
+                      ? t(
+                          "افتح التطبيق من رابط موثوق وآمن حتى يتمكن الجهاز من إظهار طلب إذن الميكروفون.",
+                          "Open the app from a secure link so your device can prompt for microphone permission."
+                        )
+                      : recorder.error === "MIC_IFRAME_BLOCKED" || isEmbedded
+                        ? t(
+                            "لا يمكن تشغيل الميكروفون داخل هذه النافذة المصغرة — افتح التطبيق في نافذة مستقلة ثم اسمح بالوصول.",
+                            "Microphone access is restricted inside this embedded view — open the app in its own window and allow access."
+                          )
+                        : isInAppBrowser
+                          ? t(
+                              "اختر «الفتح في المتصفح» من قائمة الخيارات ليتمكن الجهاز من تفعيل الميكروفون.",
+                              "Choose \"Open in browser\" from the menu so your device can grant microphone access."
+                            )
+                          : recorder.error === "MIC_REVOKED_MID_RECORDING"
+                            ? t(
+                                "تم حفظ الأجزاء المسجلة حتى لحظة الانقطاع ويمكنك استعادتها أعلى الصفحة.",
+                                "Audio saved before interruption is kept safely and can be recovered above."
+                              )
+                            : recorder.error === "MIC_IN_USE"
+                              ? t(
+                                  "أغلق أي مكالمة أو مسجل صوت آخر يستخدم الميكروفون ثم حاول مجدداً.",
+                                  "Close any other call or recording app using the microphone, then try again."
+                                )
+                              : recorder.error === "MIC_NOT_FOUND"
+                                ? t(
+                                    "تحقق من توصيل الميكروفون أو استورد ملفاً صوتياً جاهزاً مباشرة.",
+                                    "Check that a microphone is connected, or import an existing audio file."
+                                  )
+                                : !recorder.micSupported || recorder.error === "MIC_UNSUPPORTED"
+                                  ? t(
+                                      "لا يدعم الجهاز الحالي التسجيل المباشر هنا — يمكنك استيراد أي ملف صوتي مسجل مسبقاً.",
+                                      "Direct recording is unavailable here — you can import a pre-recorded audio file instead."
+                                    )
+                                  : t(
+                                      "لم يتم السماح باستخدام الميكروفون. يمكنك تفعيل الإذن من إعدادات التطبيق في جهازك أو إعدادات الموقع، ثم إعادة المحاولة.",
+                                      "Microphone access was not allowed. Enable microphone permission in your device or site settings, then try again."
+                                    )}
+                  </p>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {(recorder.error === "MIC_IFRAME_BLOCKED" || isEmbedded) && (
+                      <Button
+                        variant="primary"
+                        className="h-9 text-xs"
+                        onClick={() => window.open(window.location.href, "_blank", "noopener,noreferrer")}
+                      >
+                        <ExternalLink size={14} /> {t("فتح في نافذة مستقلة", "Open in full window")}
+                      </Button>
+                    )}
+                    {!isInsecure && recorder.micSupported && (
+                      <Button
+                        variant="accent"
+                        className="h-9 text-xs"
+                        disabled={requestingPerm || requestingHere}
+                        onClick={() => void handleRequestPermission()}
+                      >
+                        <Mic size={14} />{" "}
+                        {requestingPerm
+                          ? t("جارٍ الطلب…", "Requesting…")
+                          : recorder.permissionState === "denied" || recorder.error === "MIC_PERMISSION_DENIED"
+                            ? t("إعادة المحاولة", "Try again")
+                            : t("السماح بالوصول", "Allow access")}
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      className="h-9 text-xs"
+                      disabled={importingAudio}
+                      onClick={() => audioFileRef.current?.click()}
+                    >
+                      <Upload size={14} /> {t("استيراد ملف صوتي بدلاً من ذلك", "Import audio file instead")}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
         {activeHere && (
           <div className="mt-4 space-y-3 rounded-2xl border border-danger/30 bg-danger/5 p-4">

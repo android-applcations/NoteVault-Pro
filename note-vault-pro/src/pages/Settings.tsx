@@ -1,6 +1,6 @@
 import { useLiveQuery } from "dexie-react-hooks";
-import { Archive, CheckCircle2, Download, FolderUp, HardDrive, Mic, Monitor, Moon, RefreshCw, ShieldAlert, ShieldCheck, Sun, Trash2, Upload, X } from "lucide-react";
-import { useRef, useState } from "react";
+import { Archive, CheckCircle2, Clipboard, Download, FolderUp, HardDrive, Mic, Monitor, Moon, RefreshCw, ShieldAlert, ShieldCheck, Smartphone, Sun, Trash2, Upload, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { deleteInstalledModel, downloadCatalogModel, importLocalModelPack, verifyInstalledModel, type DownloadProgress } from "@/asr/modelManager";
 import { ASR_CATALOG } from "@/asr/models";
 import type { AsrModelRecord } from "@/data/types";
@@ -8,6 +8,7 @@ import { formatBytes } from "@/domain/text";
 import { applyBackup, BackupError, exportBackup, exportNotesText, parseBackup, previewBackup, type ImportMode, type ParsedBackup } from "@/services/backup";
 import { db } from "@/data/db";
 import { DEFAULT_MAX_VERSIONS } from "@/services/notes";
+import { permissionManager, type LivePermissionState } from "@/services/permissions";
 import { rebuildIndex } from "@/services/search";
 import { auditDatabaseIntegrity, cleanPreviews, cleanupOrphans, deleteUnlinkedFiles, getStorageReport, requestPersistence, type IntegrityReport } from "@/services/storage";
 import { useApp } from "@/ui/app-context";
@@ -42,6 +43,32 @@ export default function Settings() {
   const [parsed, setParsed] = useState<ParsedBackup | null>(null);
   const [mode, setMode] = useState<ImportMode>("merge");
   const [integrity, setIntegrity] = useState<IntegrityReport | null>(null);
+  const [caps, setCaps] = useState(() => permissionManager.getSnapshot());
+  const [permBusy, setPermBusy] = useState(false);
+
+  useEffect(() => {
+    const unsub = permissionManager.subscribe(setCaps);
+    void permissionManager.refreshAll();
+    const sync = () => {
+      if (document.visibilityState !== "hidden") {
+        void permissionManager.refreshAll();
+      }
+    };
+    window.addEventListener("focus", sync);
+    document.addEventListener("visibilitychange", sync);
+    return () => {
+      unsub();
+      window.removeEventListener("focus", sync);
+      document.removeEventListener("visibilitychange", sync);
+    };
+  }, []);
+
+  const permBadge = (state: LivePermissionState) => {
+    if (state === "granted") return <Badge color="#15803d">{t("مسموح", "Allowed")}</Badge>;
+    if (state === "denied") return <Badge color="#c42a3b">{t("غير مسموح", "Blocked")}</Badge>;
+    if (state === "unsupported") return <Badge color="#c42a3b">{t("غير متاح", "Unavailable")}</Badge>;
+    return <Badge>{t("لم يُطلب بعد", "Not requested")}</Badge>;
+  };
 
   const errText = (e: unknown) => {
     const c = e instanceof BackupError ? e.code : "";
@@ -82,6 +109,85 @@ export default function Settings() {
           <Field label={t("عدد النسخ المحفوظة لكل ملاحظة", "Versions kept per note")}>{(id) => <Input id={id} type="number" min={1} max={200} value={maxVersions ?? DEFAULT_MAX_VERSIONS} onChange={(e) => db.appSettings.put({ key: "maxVersions", value: Math.min(200, Math.max(1, Number(e.target.value) || 1)) })} />}</Field>
           <Field label={t("حد صفحات البحث السريع في PDF", "PDF fast-search page limit")}>{(id) => <Input id={id} type="number" min={50} max={20000} step={50} value={pdfIndexLimit ?? 1500} onChange={(e) => db.appSettings.put({ key: "pdfIndexLimit", value: Math.min(20000, Math.max(50, Math.round(Number(e.target.value) || 1500))) })} />}</Field>
           <label className="flex items-center gap-2 self-end pb-2 text-sm font-bold md:col-span-2"><input type="checkbox" className="h-4 w-4 accent-[var(--accent)]" checked={!!keepOriginal} onChange={(e) => db.appSettings.put({ key: "keepOriginalImages", value: e.target.checked })} />{t("الاحتفاظ بالصور الأصلية (دون ضغط)", "Keep original images (no compression)")}</label>
+        </div>
+      </Section>
+
+      <Section title={t("أذونات التطبيق", "App permissions")} icon={<ShieldCheck size={18} />}>
+        <p className="mb-3 text-xs text-muted">
+          {t(
+            "تُطلب الأذونات فقط عند استخدام الميزة التي تحتاج إليها، وتُقرأ حالتها مباشرة من جهازك.",
+            "Permissions are requested only when you use a feature and reflect live device status."
+          )}
+        </p>
+        <div className="space-y-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line bg-surface2/60 p-3">
+            <div className="flex min-w-0 flex-1 items-start gap-2.5">
+              <Mic size={16} className="mt-0.5 shrink-0 text-accent" />
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2 text-sm font-bold">
+                  <span>{t("الميكروفون (مسجل المحاضرات)", "Microphone (Lecture Recorder)")}</span>
+                  {permBadge(caps.microphone)}
+                </div>
+                <p className="mt-0.5 text-xs text-muted">
+                  {caps.microphone === "denied"
+                    ? t("لم يتم السماح باستخدام الميكروفون. يمكنك تفعيل الإذن من إعدادات التطبيق في جهازك.", "Microphone access is turned off. Enable it from your device or site settings.")
+                    : caps.microphone === "unsupported"
+                      ? t("التسجيل المباشر غير متاح على هذا الجهاز حالياً.", "Live recording is unavailable on this device.")
+                      : t("يُستخدم عند الضغط على بدء تسجيل المحاضرة فقط.", "Used only when you start recording a lecture.")}
+                </p>
+              </div>
+            </div>
+            {caps.microphoneSupported && caps.microphone !== "granted" && caps.isSecureContext && !caps.isEmbedded && (
+              <Button
+                className="h-8 text-xs"
+                disabled={permBusy}
+                onClick={async () => {
+                  setPermBusy(true);
+                  try {
+                    await permissionManager.requestMicrophoneAccess();
+                    toast(t("تم تفعيل الميكروفون", "Microphone enabled"));
+                  } catch {
+                    toast(t("لم يتم السماح باستخدام الميكروفون. يمكنك تفعيل الإذن من إعدادات التطبيق في جهازك.", "Microphone access was not granted."), "err");
+                  } finally {
+                    setPermBusy(false);
+                  }
+                }}
+              >
+                {caps.microphone === "denied" ? t("إعادة المحاولة", "Try again") : t("تفعيل الميكروفون", "Allow mic")}
+              </Button>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line bg-surface2/60 p-3">
+            <div className="flex min-w-0 flex-1 items-start gap-2.5">
+              <Smartphone size={16} className="mt-0.5 shrink-0 text-accent" />
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2 text-sm font-bold">
+                  <span>{t("إبقاء الشاشة مضاءة أثناء التسجيل", "Keep screen awake while recording")}</span>
+                  <Badge color={caps.wakeLockSupported ? "#0b8579" : undefined}>
+                    {caps.wakeLockSupported ? t("متاح تلقائياً", "Supported") : t("غير مدعوم", "Unsupported")}
+                  </Badge>
+                </div>
+                <p className="mt-0.5 text-xs text-muted">
+                  {t("يُفعّل تلقائياً أثناء تسجيل المحاضرة فقط ويتوقف فور الإيقاف.", "Enabled only while actively recording and released immediately afterward.")}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line bg-surface2/60 p-3">
+            <div className="flex min-w-0 flex-1 items-start gap-2.5">
+              <Clipboard size={16} className="mt-0.5 shrink-0 text-accent" />
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2 text-sm font-bold">
+                  <span>{t("الحافظة (نسخ النصوص والمراجع)", "Clipboard (Copy notes & references)")}</span>
+                  <Badge color={caps.clipboardSupported ? "#0b8579" : undefined}>
+                    {caps.clipboardSupported ? t("متاح", "Available") : t("غير مدعوم", "Unsupported")}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </Section>
 

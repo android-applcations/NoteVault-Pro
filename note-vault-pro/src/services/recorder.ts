@@ -1,5 +1,11 @@
-// Live MediaRecorder controller with progressive chunk persistence, pause/resume, live meter & WakeLock.
+// Live MediaRecorder controller with progressive chunk persistence, pause/resume, live meter & centralized PermissionManager integration.
 import type { Attachment, LectureRecording } from "@/data/types";
+import {
+  detectMicrophoneSupport,
+  mapMicrophoneError,
+  permissionManager,
+  type LivePermissionState,
+} from "./permissions";
 import {
   appendRecordingChunk,
   discardRecordingSession,
@@ -10,6 +16,7 @@ import {
 } from "./recordings";
 
 export type RecorderPhase = "idle" | "requesting_mic" | "recording" | "paused" | "saving" | "error";
+export type MicPermissionState = "unknown" | "prompt" | "granted" | "denied";
 
 export interface RecorderSnapshot {
   phase: RecorderPhase;
@@ -24,6 +31,11 @@ export interface RecorderSnapshot {
   level: number; // 0..1 normalized mic RMS
   error: string | null;
   micSupported: boolean;
+  permissionState: MicPermissionState;
+}
+
+function toMicPermState(s: LivePermissionState): MicPermissionState {
+  return s === "granted" || s === "denied" || s === "prompt" ? s : "unknown";
 }
 
 class LectureRecorderController {
@@ -39,10 +51,8 @@ class LectureRecorderController {
     chunkCount: 0,
     level: 0,
     error: null,
-    micSupported:
-      typeof navigator !== "undefined" &&
-      Boolean(navigator.mediaDevices?.getUserMedia) &&
-      typeof MediaRecorder !== "undefined",
+    micSupported: detectMicrophoneSupport(),
+    permissionState: toMicPermState(permissionManager.getSnapshot().microphone),
   };
 
   private listeners = new Set<(s: RecorderSnapshot) => void>();
@@ -51,7 +61,6 @@ class LectureRecorderController {
   private audioCtx: AudioContext | null = null;
   private analyser: AnalyserNode | null = null;
   private analyserData: Uint8Array | null = null;
-  private wakeLock: WakeLockSentinel | null = null;
 
   private activeStartedAtMs = 0;
   private accumulatedActiveMs = 0;
@@ -62,6 +71,29 @@ class LectureRecorderController {
   private chunkQueue: Promise<void> = Promise.resolve();
   private stopPromiseResolver: (() => void) | null = null;
   private beforeUnloadAttached = false;
+  private visibilityAttached = false;
+
+  constructor() {
+    permissionManager.subscribe((caps) => {
+      const nextPerm = toMicPermState(caps.microphone);
+      const clearErr =
+        nextPerm === "granted" &&
+        (this.snap.error === "MIC_PERMISSION_DENIED" || this.snap.error === "MIC_IFRAME_BLOCKED");
+      const changed =
+        nextPerm !== this.snap.permissionState ||
+        caps.microphoneSupported !== this.snap.micSupported ||
+        clearErr;
+      if (changed) {
+        this.update({
+          micSupported: caps.microphoneSupported,
+          permissionState: nextPerm,
+          ...(clearErr
+            ? { error: null, phase: this.snap.phase === "error" ? "idle" : this.snap.phase }
+            : {}),
+        });
+      }
+    });
+  }
 
   subscribe(fn: (s: RecorderSnapshot) => void): () => void {
     this.listeners.add(fn);
@@ -73,6 +105,37 @@ class LectureRecorderController {
 
   getSnapshot(): RecorderSnapshot {
     return { ...this.snap };
+  }
+
+  async refreshPermissionState(): Promise<MicPermissionState> {
+    const state = await permissionManager.queryPermissionState("microphone");
+    const mapped = toMicPermState(state);
+    this.update({
+      micSupported: detectMicrophoneSupport(),
+      permissionState: mapped,
+    });
+    return mapped;
+  }
+
+  async requestMicrophoneAccess(): Promise<boolean> {
+    try {
+      await permissionManager.requestMicrophoneAccess();
+      this.update({
+        permissionState: "granted",
+        error: null,
+        phase: this.snap.phase === "error" ? "idle" : this.snap.phase,
+        micSupported: detectMicrophoneSupport(),
+      });
+      return true;
+    } catch (err) {
+      const code = mapMicrophoneError(err);
+      this.update({
+        phase: "error",
+        error: code,
+        ...(code === "MIC_PERMISSION_DENIED" ? { permissionState: "denied" as const } : {}),
+      });
+      throw new Error(code);
+    }
   }
 
   private update(patch: Partial<RecorderSnapshot>) {
@@ -102,34 +165,36 @@ class LectureRecorderController {
     }
   };
 
-  private attachUnloadGuard(on: boolean) {
-    if (typeof window === "undefined") return;
-    if (on && !this.beforeUnloadAttached) {
-      window.addEventListener("beforeunload", this.onBeforeUnload);
-      this.beforeUnloadAttached = true;
-    } else if (!on && this.beforeUnloadAttached) {
-      window.removeEventListener("beforeunload", this.onBeforeUnload);
-      this.beforeUnloadAttached = false;
-    }
-  }
-
-  private async requestWakeLock() {
-    try {
-      if (typeof navigator !== "undefined" && navigator.wakeLock?.request) {
-        this.wakeLock = await navigator.wakeLock.request("screen");
+  private onVisibilityChange = () => {
+    if (typeof document === "undefined" || document.visibilityState !== "visible") return;
+    if (this.snap.phase === "recording") {
+      void permissionManager.acquireWakeLock();
+      if (this.audioCtx?.state === "suspended") {
+        void this.audioCtx.resume().catch(() => undefined);
       }
-    } catch {
-      this.wakeLock = null;
+      this.update({ elapsedMs: this.currentElapsedMs() });
     }
-  }
+  };
 
-  private async releaseWakeLock() {
-    try {
-      await this.wakeLock?.release();
-    } catch {
-      /* ignore */
+  private attachGuards(on: boolean) {
+    if (typeof window !== "undefined") {
+      if (on && !this.beforeUnloadAttached) {
+        window.addEventListener("beforeunload", this.onBeforeUnload);
+        this.beforeUnloadAttached = true;
+      } else if (!on && this.beforeUnloadAttached) {
+        window.removeEventListener("beforeunload", this.onBeforeUnload);
+        this.beforeUnloadAttached = false;
+      }
     }
-    this.wakeLock = null;
+    if (typeof document !== "undefined") {
+      if (on && !this.visibilityAttached) {
+        document.addEventListener("visibilitychange", this.onVisibilityChange);
+        this.visibilityAttached = true;
+      } else if (!on && this.visibilityAttached) {
+        document.removeEventListener("visibilitychange", this.onVisibilityChange);
+        this.visibilityAttached = false;
+      }
+    }
   }
 
   private startMeters() {
@@ -177,10 +242,10 @@ class LectureRecorderController {
 
   private cleanupHardware() {
     this.stopMeters();
-    this.attachUnloadGuard(false);
-    void this.releaseWakeLock();
+    this.attachGuards(false);
+    void permissionManager.releaseWakeLock();
     if (this.stream) {
-      for (const tr of this.stream.getTracks()) tr.stop();
+      permissionManager.releaseStream(this.stream);
       this.stream = null;
     }
     if (this.audioCtx) {
@@ -201,9 +266,14 @@ class LectureRecorderController {
     if (this.snap.phase !== "idle" && this.snap.phase !== "error") {
       throw new Error("RECORDER_ALREADY_ACTIVE");
     }
-    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
-      this.update({ phase: "error", error: "MIC_UNSUPPORTED", micSupported: false });
-      throw new Error("MIC_UNSUPPORTED");
+    const supported = detectMicrophoneSupport();
+    if (!supported || typeof MediaRecorder === "undefined") {
+      const code =
+        typeof window !== "undefined" && window.isSecureContext === false
+          ? "MIC_INSECURE_CONTEXT"
+          : "MIC_UNSUPPORTED";
+      this.update({ phase: "error", error: code, micSupported: supported });
+      throw new Error(code);
     }
 
     const choice = probeSupportedRecordingMime();
@@ -219,27 +289,78 @@ class LectureRecorderController {
       chunkCount: 0,
       level: 0,
       error: null,
+      micSupported: supported,
     });
 
+    let createdSessionId: string | null = null;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      });
+      const stream = await permissionManager.requestMicrophoneStream();
       this.stream = stream;
+      this.update({ permissionState: "granted" });
 
-      const deviceLabel = stream.getAudioTracks()[0]?.label;
+      let mr: MediaRecorder;
+      try {
+        mr = new MediaRecorder(stream, { mimeType: choice.mime, audioBitsPerSecond: 64000 });
+      } catch {
+        try {
+          mr = new MediaRecorder(stream, { mimeType: choice.mime });
+        } catch {
+          mr = new MediaRecorder(stream);
+        }
+      }
+      const actualBaseMime =
+        (mr.mimeType || choice.baseMime).split(";")[0].trim().toLowerCase() || choice.baseMime;
+      const actualExt = actualBaseMime.includes("mp4")
+        ? "m4a"
+        : actualBaseMime.includes("ogg")
+          ? "ogg"
+          : "webm";
+
+      const track = stream.getAudioTracks()[0];
+      const deviceLabel = track?.label;
       const session = await startRecordingSessionRecord({
         subjectId: opts.subjectId,
         lectureId: opts.lectureId || undefined,
         title: opts.title,
-        mime: choice.baseMime,
-        ext: choice.ext,
+        mime: actualBaseMime,
+        ext: actualExt,
         deviceLabel,
       });
+      createdSessionId = session.id;
+
+      // Monitor unexpected OS/browser revocation or hardware disconnect mid-recording
+      if (track && typeof track.addEventListener === "function") {
+        track.addEventListener("ended", () => {
+          if (this.snap.phase === "recording" || this.snap.phase === "paused") {
+            if (this.snap.phase === "recording" && this.activeStartedAtMs > 0) {
+              this.accumulatedActiveMs += Date.now() - this.activeStartedAtMs;
+              this.activeStartedAtMs = 0;
+            }
+            if (mr.state !== "inactive") {
+              try {
+                mr.stop();
+              } catch {
+                /* ignore */
+              }
+            }
+            if (this.snap.recordingId) {
+              void updateRecordingStatus(this.snap.recordingId, {
+                status: "error",
+                errorDetail: "MIC_REVOKED_MID_RECORDING",
+                durationMs: this.accumulatedActiveMs,
+              });
+            }
+            this.cleanupHardware();
+            this.update({
+              phase: "error",
+              elapsedMs: this.accumulatedActiveMs,
+              level: 0,
+              error: "MIC_REVOKED_MID_RECORDING",
+            });
+            void permissionManager.queryPermissionState("microphone");
+          }
+        });
+      }
 
       // Best-effort mic level analyser
       try {
@@ -249,6 +370,7 @@ class LectureRecorderController {
             : (globalThis as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
         if (AudioCtx) {
           const ctx = new AudioCtx();
+          if (ctx.state === "suspended") void ctx.resume().catch(() => undefined);
           const source = ctx.createMediaStreamSource(stream);
           const analyser = ctx.createAnalyser();
           analyser.fftSize = 256;
@@ -261,12 +383,6 @@ class LectureRecorderController {
         /* meter optional */
       }
 
-      let mr: MediaRecorder;
-      try {
-        mr = new MediaRecorder(stream, { mimeType: choice.mime, audioBitsPerSecond: 64000 });
-      } catch {
-        mr = new MediaRecorder(stream);
-      }
       this.mediaRecorder = mr;
       this.chunkQueue = Promise.resolve();
       this.accumulatedActiveMs = 0;
@@ -290,7 +406,7 @@ class LectureRecorderController {
               recordingId: recId,
               seq,
               blob,
-              mime: choice.baseMime,
+              mime: actualBaseMime,
               durationMs,
               startMs,
               endMs,
@@ -326,24 +442,30 @@ class LectureRecorderController {
         phase: "recording",
         recordingId: session.id,
         title: session.title,
+        mime: actualBaseMime,
       });
 
-      this.attachUnloadGuard(true);
-      await this.requestWakeLock();
+      this.attachGuards(true);
+      await permissionManager.acquireWakeLock();
       this.startMeters();
-      mr.start(opts.timesliceMs ?? 15_000);
+      try {
+        mr.start(opts.timesliceMs ?? 15_000);
+      } catch {
+        mr.start();
+      }
       return session.id;
     } catch (err) {
       this.cleanupHardware();
-      const msg =
-        err instanceof DOMException && (err.name === "NotAllowedError" || err.name === "PermissionDeniedError")
-          ? "MIC_PERMISSION_DENIED"
-          : err instanceof DOMException && err.name === "NotFoundError"
-            ? "MIC_NOT_FOUND"
-            : err instanceof Error
-              ? err.message
-              : String(err);
-      this.update({ phase: "error", recordingId: null, error: msg });
+      if (createdSessionId) {
+        await discardRecordingSession(createdSessionId).catch(() => undefined);
+      }
+      const msg = mapMicrophoneError(err);
+      this.update({
+        phase: "error",
+        recordingId: null,
+        error: msg,
+        ...(msg === "MIC_PERMISSION_DENIED" ? { permissionState: "denied" as const } : {}),
+      });
       throw new Error(msg);
     }
   }
@@ -359,6 +481,7 @@ class LectureRecorderController {
       } catch {
         /* ignore */
       }
+      void permissionManager.releaseWakeLock();
       void updateRecordingStatus(this.snap.recordingId, { status: "paused", durationMs: this.accumulatedActiveMs });
       this.update({
         phase: "paused",
@@ -373,6 +496,7 @@ class LectureRecorderController {
     if (this.mediaRecorder.state === "paused") {
       this.activeStartedAtMs = Date.now();
       this.mediaRecorder.resume();
+      void permissionManager.acquireWakeLock();
       void updateRecordingStatus(this.snap.recordingId, { status: "recording" });
       this.update({ phase: "recording" });
     }

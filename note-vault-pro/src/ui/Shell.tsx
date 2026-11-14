@@ -59,7 +59,27 @@ export function Shell({ children }: { children: ReactNode }) {
   const isEditor = /^\/notes\/[^/]+$/.test(loc.pathname) || /^\/files\//.test(loc.pathname);
 
   useEffect(() => {
-    registerServiceWorker((apply) => toast(t("يتوفر إصدار جديد من التطبيق", "A new version is available"), "info", { label: t("تحديث", "Update"), run: apply }));
+    const canApplySafely = () => {
+      const p = lectureRecorder.getSnapshot().phase;
+      return p !== "recording" && p !== "paused" && p !== "saving";
+    };
+    registerServiceWorker(
+      (apply) =>
+        toast(t("يتوفر إصدار جديد من التطبيق", "A new version is available"), "info", {
+          label: t("تحديث", "Update"),
+          run: () => {
+            if (!canApplySafely()) {
+              toast(
+                t("أوقف واحفظ التسجيل الحالي أولاً قبل التحديث", "Stop and save your active recording before updating"),
+                "info"
+              );
+              return;
+            }
+            apply();
+          },
+        }),
+      canApplySafely
+    );
     // storage pressure warning (never deletes anything)
     navigator.storage?.estimate?.().then((e) => {
       if (e?.quota && e.usage && e.usage / e.quota > 0.85) toast(t("مساحة التخزين تقترب من الامتلاء — احتفظ بنسخة احتياطية.", "Storage is almost full — keep a backup."), "err");

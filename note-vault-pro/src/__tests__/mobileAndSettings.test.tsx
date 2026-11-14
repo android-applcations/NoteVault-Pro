@@ -11,8 +11,10 @@ import Dashboard from "@/pages/Dashboard";
 import More from "@/pages/More";
 import RecordLecture from "@/pages/RecordLecture";
 import Settings from "@/pages/Settings";
+import { lectureRecorder } from "@/services/recorder";
 import { AppProvider } from "@/ui/app-context";
 import { I18nProvider } from "@/ui/i18n";
+import { LectureRecorderPanel } from "@/ui/LectureRecorderPanel";
 import { Shell } from "@/ui/Shell";
 import { TranscriptPanel } from "@/ui/TranscriptPanel";
 
@@ -82,9 +84,11 @@ describe("Mobile/iPad experience, zoom/selection/status-bar contracts, and Setti
     expect(screen.queryByRole("heading", { name: "الخصوصية" })).toBeNull();
     expect(screen.queryByText(/تخزين المتصفح|SHA-256|Whisper|Safari|Chrome/)).toBeNull();
 
+    expect(screen.getByRole("heading", { name: "أذونات التطبيق" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "مساحة التخزين" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "النسخ الاحتياطي والاستعادة" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "التفريغ الصوتي للمحاضرات" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /منح جميع الأذونات/ })).toBeNull();
     expect(screen.getByRole("button", { name: "تصدير نسخة كاملة" })).toBeTruthy();
     expect(await screen.findByRole("button", { name: "فحص سلامة البيانات" })).toBeTruthy();
 
@@ -95,11 +99,17 @@ describe("Mobile/iPad experience, zoom/selection/status-bar contracts, and Setti
     });
 
     cleanup();
+    await db.appSettings.clear();
     wrap(<Settings />, "en");
     await screen.findByRole("heading", { name: "Settings" });
     expect(screen.queryByRole("heading", { name: "Install on your device" })).toBeNull();
     expect(screen.queryByRole("heading", { name: "Privacy" })).toBeNull();
-    expect(screen.queryByText(/browser storage|SHA-256|Whisper|Add to Home Screen/i)).toBeNull();
+    expect(
+      screen.queryByText(
+        /browser storage|SHA-256|Whisper|Add to Home Screen|Service Worker|Manifest|Cache Storage|Permission API|Secure Context|WebAssembly/i
+      )
+    ).toBeNull();
+    expect(screen.getByRole("heading", { name: "App permissions" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Lecture Transcription" })).toBeTruthy();
   });
 
@@ -177,19 +187,89 @@ describe("Mobile/iPad experience, zoom/selection/status-bar contracts, and Setti
       installCommand: string;
       buildCommand: string;
       outputDirectory: string;
+      headers: Array<{ source: string; headers: Array<{ key: string; value: string }> }>;
     };
     expect(rootVercel.installCommand).toContain("cd note-vault-pro");
     expect(rootVercel.installCommand).toContain("--include=dev");
     expect(rootVercel.buildCommand).toContain("cd note-vault-pro");
     expect(rootVercel.outputDirectory).toBe("note-vault-pro/dist");
+    expect(
+      rootVercel.headers[0].headers.some((h) => h.key === "Permissions-Policy" && h.value.includes("microphone=(self)"))
+    ).toBe(true);
 
     const appVercel = JSON.parse(readFileSync(path.join(ROOT, "vercel.json"), "utf8")) as {
       installCommand: string;
       buildCommand: string;
       outputDirectory: string;
+      headers: Array<{ source: string; headers: Array<{ key: string; value: string }> }>;
     };
     expect(appVercel.installCommand).toContain("--include=dev");
     expect(appVercel.buildCommand).toBe("npm run build");
     expect(appVercel.outputDirectory).toBe("dist");
+    expect(
+      appVercel.headers[0].headers.some((h) => h.key === "Permissions-Policy" && h.value.includes("microphone=(self)"))
+    ).toBe(true);
+  });
+
+  it("handles microphone permission denial, constraint fallback, and inline permission recovery controls", async () => {
+    const origDevices = navigator.mediaDevices;
+    const origMediaRecorder = (globalThis as unknown as { MediaRecorder?: unknown }).MediaRecorder;
+
+    // 1. Constraint fallback: OverconstrainedError on rich constraints retries cleanly with { audio: true }
+    let calls = 0;
+    const stopMock = () => undefined;
+    const fakeStream = {
+      getTracks: () => [{ stop: stopMock }],
+      getAudioTracks: () => [{ label: "Built-in Mic", stop: stopMock }],
+    } as unknown as MediaStream;
+
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: {
+        getUserMedia: async (c: MediaStreamConstraints) => {
+          calls++;
+          if (typeof c.audio === "object") {
+            throw new DOMException("Overconstrained", "OverconstrainedError");
+          }
+          return fakeStream;
+        },
+      },
+    });
+    (globalThis as unknown as { MediaRecorder?: unknown }).MediaRecorder = class {
+      mimeType = "audio/webm";
+      state = "inactive";
+      start() {}
+      stop() {}
+    };
+
+    try {
+      const ok = await lectureRecorder.requestMicrophoneAccess();
+      expect(ok).toBe(true);
+      expect(calls).toBe(2);
+      expect(lectureRecorder.getSnapshot().permissionState).toBe("granted");
+
+      // 2. Denied permission surfaces actionable inline recovery UI (never a silent dead button)
+      Object.defineProperty(navigator, "mediaDevices", {
+        configurable: true,
+        value: {
+          getUserMedia: async () => {
+            throw new DOMException("Permission denied", "NotAllowedError");
+          },
+        },
+      });
+
+      wrap(<LectureRecorderPanel lectureTitle="Calculus" />, "ar");
+      const recordBtn = await screen.findByRole("button", { name: "بدء تسجيل المحاضرة" });
+      expect((recordBtn as HTMLButtonElement).disabled).toBe(false);
+      fireEvent.click(recordBtn);
+
+      expect(await screen.findByRole("alert")).toBeTruthy();
+      expect(screen.getByText("لم يتم السماح باستخدام الميكروفون")).toBeTruthy();
+      expect(screen.getByRole("button", { name: "إعادة المحاولة" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "استيراد ملف صوتي بدلاً من ذلك" })).toBeTruthy();
+    } finally {
+      Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: origDevices });
+      (globalThis as unknown as { MediaRecorder?: unknown }).MediaRecorder = origMediaRecorder;
+    }
   });
 });
