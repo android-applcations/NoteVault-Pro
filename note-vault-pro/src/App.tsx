@@ -28,6 +28,7 @@ const CalendarPage = lazy(() => import("@/pages/CalendarPage"));
 const Trash = lazy(() => import("@/pages/Trash"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const More = lazy(() => import("@/pages/More"));
+const RecordLecture = lazy(() => import("@/pages/RecordLecture"));
 
 function Loading() {
   return (
@@ -85,6 +86,7 @@ function Boot() {
                 <Route path="/subjects/:id" element={<SubjectPage />} />
                 <Route path="/semesters" element={<Semesters />} />
                 <Route path="/lectures/:id" element={<LecturePage />} />
+                <Route path="/record" element={<RecordLecture />} />
                 <Route path="/notes" element={<Notes />} />
                 <Route path="/notes/:id" element={<NoteEditor />} />
                 <Route path="/library" element={<Library />} />

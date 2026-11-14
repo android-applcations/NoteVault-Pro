@@ -1,7 +1,7 @@
 import type { Editor, JSONContent } from "@tiptap/core";
 import { useLiveQuery } from "dexie-react-hooks";
 import { AnimatePresence, motion } from "motion/react";
-import { AlertTriangle, ArrowRight, Archive, Check, Clock, CloudUpload, Copy, Download, History, Info, Loader2, Paperclip, Pin, RotateCcw, Star, Trash2, Zap } from "lucide-react";
+import { AlertTriangle, ArrowRight, Archive, Check, Clock, CloudUpload, Copy, Download, History, Info, Loader2, Mic, Paperclip, Pin, RotateCcw, Star, Trash2, Zap } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { db } from "@/data/db";
@@ -176,6 +176,16 @@ function NoteView({ note }: { note: Note }) {
           </Button>
         )}
         <div className="ms-auto flex items-center gap-1">
+          <IconButton
+            label={t("تسجيل محاضرة صوتياً", "Record lecture audio")}
+            onClick={async () => {
+              await saverRef.current?.flush();
+              nav(note.lectureId ? `/lectures/${note.lectureId}?record=1` : note.subjectId ? `/record?subjectId=${note.subjectId}` : "/record");
+            }}
+            className="text-accent"
+          >
+            <Mic size={18} />
+          </IconButton>
           <IconButton label={live.pinned ? t("إلغاء التثبيت", "Unpin") : t("تثبيت", "Pin")} aria-pressed={live.pinned} onClick={() => void updateNoteMeta(note.id, { pinned: !live.pinned })} className={live.pinned ? "text-accent" : ""}><Pin size={18} /></IconButton>
           <IconButton label={live.favorite ? t("إزالة من المفضلة", "Remove favourite") : t("مفضلة", "Favourite")} aria-pressed={live.favorite} onClick={() => void updateNoteMeta(note.id, { favorite: !live.favorite })} className={live.favorite ? "text-warn" : ""}><Star size={18} fill={live.favorite ? "currentColor" : "none"} /></IconButton>
           <IconButton label={t("المرفقات", "Attachments")} onClick={() => setPanel(panel === "files" ? null : "files")} className={panel === "files" ? "bg-surface2" : ""}><Paperclip size={18} />{files.length > 0 && <span className="absolute -mt-5 ms-5 rounded-full bg-accent px-1 text-[10px] font-bold text-white">{files.length}</span>}</IconButton>

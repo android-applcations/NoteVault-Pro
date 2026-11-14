@@ -1,5 +1,5 @@
 import { useLiveQuery } from "dexie-react-hooks";
-import { FolderOpen, LayoutGrid, List } from "lucide-react";
+import { FolderOpen, LayoutGrid, List, Mic } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { db } from "@/data/db";
@@ -7,7 +7,7 @@ import type { Attachment, FileKind } from "@/data/types";
 import { normalize } from "@/domain/text";
 import { AttachmentCard, AttachmentEditModal } from "@/ui/Files";
 import { useI18n } from "@/ui/i18n";
-import { EmptyState, Input, PageHeader, Select } from "@/ui/kit";
+import { Button, EmptyState, Input, PageHeader, Select } from "@/ui/kit";
 import { Chip, UploadZone, useIncremental, useSubjects } from "@/ui/shared";
 
 function LinkedTo({ a }: { a: Attachment }) {
@@ -54,9 +54,13 @@ export default function Library() {
   return (
     <div>
       <PageHeader title={t("مكتبة الملفات", "File vault")} subtitle={t("كل ملفاتك منظمة في مكان واحد", "All your files organized in one place")}
-        actions={<div className="flex rounded-xl bg-surface2 p-1" role="group" aria-label={t("طريقة العرض", "View")}>
-          <button aria-pressed={view === "grid"} aria-label={t("شبكة", "Grid")} onClick={() => setView("grid")} className={`rounded-lg p-2 ${view === "grid" ? "bg-surface shadow" : "text-muted"}`}><LayoutGrid size={16} /></button>
-          <button aria-pressed={view === "list"} aria-label={t("قائمة", "List")} onClick={() => setView("list")} className={`rounded-lg p-2 ${view === "list" ? "bg-surface shadow" : "text-muted"}`}><List size={16} /></button></div>} />
+        actions={<div className="flex flex-wrap items-center gap-2">
+          <Link to="/record"><Button variant="primary"><Mic size={16} />{t("تسجيل محاضرة", "Record lecture")}</Button></Link>
+          <div className="flex rounded-xl bg-surface2 p-1" role="group" aria-label={t("طريقة العرض", "View")}>
+            <button aria-pressed={view === "grid"} aria-label={t("شبكة", "Grid")} onClick={() => setView("grid")} className={`rounded-lg p-2 ${view === "grid" ? "bg-surface shadow" : "text-muted"}`}><LayoutGrid size={16} /></button>
+            <button aria-pressed={view === "list"} aria-label={t("قائمة", "List")} onClick={() => setView("list")} className={`rounded-lg p-2 ${view === "list" ? "bg-surface shadow" : "text-muted"}`}><List size={16} /></button>
+          </div>
+        </div>} />
       <UploadZone />
       <div className="my-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
         <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("بحث بالاسم…", "Search by name…")} aria-label={t("بحث بالاسم", "Search by name")} dir="auto" className="lg:col-span-2" />

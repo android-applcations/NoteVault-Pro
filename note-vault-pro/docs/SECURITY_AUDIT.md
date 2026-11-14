@@ -17,6 +17,6 @@
 8. **Service Worker Hardening**: `public/sw.js` caches same-origin GETs only, excludes `ocr/*` from initial shell precache while caching on demand into runtime cache, uses `{ ignoreVary: true }` on shell matches, and checks `event.source.url` origin on `SKIP_WAITING` messages.
 
 ## Residual Limitations
-- `frame-ancestors 'none'` cannot be set inside `<meta http-equiv="Content-Security-Policy">` and should be configured as an HTTP response header when deploying on a web server.
+- `frame-ancestors 'none'` cannot be set inside `<meta http-equiv="Content-Security-Policy">`; `vercel.json` (and `note-vault-pro/vercel.json`) configures `Content-Security-Policy: frame-ancestors 'none'`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, and `Referrer-Policy: no-referrer` HTTP headers for Vercel deployments (configure equivalent headers when self-hosting elsewhere).
 - Local IndexedDB storage is unencrypted at rest on the user's device.
 - `style-src 'unsafe-inline'` remains necessary for Tailwind/KaTeX/Tiptap runtime style attributes.

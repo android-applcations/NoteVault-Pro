@@ -1,7 +1,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { ArrowRight, FilePlus2, Layers, Pencil, Plus } from "lucide-react";
-import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { db } from "@/data/db";
 import type { Attachment, ReviewStatus } from "@/data/types";
 import { setReviewStatus, updateLecture } from "@/services/library";
@@ -16,6 +16,7 @@ import { Chip, UploadZone } from "@/ui/shared";
 
 export default function LecturePage() {
   const { id = "" } = useParams();
+  const [params] = useSearchParams();
   const { t, fmtDate } = useI18n();
   const { openCard } = useApp();
   const statuses = useStatusLabels();
@@ -27,6 +28,13 @@ export default function LecturePage() {
   const [edit, setEdit] = useState(false);
   const [newNote, setNewNote] = useState(false);
   const [editFile, setEditFile] = useState<Attachment | null>(null);
+  const recSectionRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (params.get("record") === "1" && recSectionRef.current) {
+      recSectionRef.current.scrollIntoView?.({ behavior: "smooth", block: "start" });
+    }
+  }, [params, lecture?.id]);
 
   if (lecture === undefined) return null;
   if (!lecture || lecture.deletedAt) return <EmptyState icon={<Layers />} title={t("المحاضرة غير موجودة", "Lecture not found")} action={<Link to="/subjects"><Button>{t("العودة", "Back")}</Button></Link>} />;
@@ -59,15 +67,15 @@ export default function LecturePage() {
         </div>
       </section>
 
+      <section ref={recSectionRef} id="lecture-recorder">
+        <LectureRecorderPanel lectureId={id} subjectId={lecture.subjectId} lectureTitle={lecture.title} />
+      </section>
+
       <section>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h2 className="text-lg font-extrabold">{t("ملاحظات المحاضرة", "Lecture notes")}</h2><Button variant="primary" onClick={() => setNewNote(true)}><FilePlus2 size={15} />{t("ملاحظة", "Note")}</Button></div>
         {notes.length === 0 ? <EmptyState icon={<FilePlus2 />} title={t("لا توجد ملاحظات لهذه المحاضرة", "No notes for this lecture")} action={<Button variant="primary" onClick={() => setNewNote(true)}>{t("ابدأ بقالب جاهز", "Start from a template")}</Button>} /> : (
           <div className="grid gap-2 md:grid-cols-2">{notes.map((n) => <Link key={n.id} to={`/notes/${n.id}`} className="card-surface min-w-0 p-4 hover:border-accent"><div className="truncate font-extrabold" dir="auto">{n.title || t("بدون عنوان", "Untitled")}</div><p className="mt-1 line-clamp-2 text-sm text-muted" dir="auto">{n.text.slice(0, 140)}</p></Link>)}</div>
         )}
-      </section>
-
-      <section>
-        <LectureRecorderPanel lectureId={id} subjectId={lecture.subjectId} lectureTitle={lecture.title} />
       </section>
 
       <section>

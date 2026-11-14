@@ -10,7 +10,7 @@ const VIEWPORTS = [
   { name: "ipad-pro-1180", width: 1180, height: 820 },
 ] as const;
 
-const ROUTES = ["/", "/#/subjects", "/#/notes", "/#/library", "/#/flashcards", "/#/quizzes", "/#/calendar", "/#/semesters", "/#/settings", "/#/more"];
+const ROUTES = ["/", "/#/record", "/#/subjects", "/#/notes", "/#/library", "/#/flashcards", "/#/quizzes", "/#/calendar", "/#/semesters", "/#/settings", "/#/more"];
 
 test("Responsive zero-overflow across phone (320px-390px) and iPad (768px-1180px), selection guards, and status bar", async ({ page }) => {
   await page.addInitScript(() => {

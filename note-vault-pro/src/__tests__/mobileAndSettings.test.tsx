@@ -7,6 +7,9 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/data/db";
 import type { LectureRecording } from "@/data/types";
+import Dashboard from "@/pages/Dashboard";
+import More from "@/pages/More";
+import RecordLecture from "@/pages/RecordLecture";
 import Settings from "@/pages/Settings";
 import { AppProvider } from "@/ui/app-context";
 import { I18nProvider } from "@/ui/i18n";
@@ -130,5 +133,63 @@ describe("Mobile/iPad experience, zoom/selection/status-bar contracts, and Setti
     expect(await screen.findByRole("heading", { name: "Transcription" })).toBeTruthy();
     expect(screen.getByText("Transcription is not ready yet")).toBeTruthy();
     expect(screen.queryByText(/Whisper|SHA-256|16kHz|in your browser/i)).toBeNull();
+  });
+
+  it("exposes Lecture Audio Recorder prominently on RecordLecture, Dashboard, More, and Shell", async () => {
+    wrap(<Dashboard />, "ar");
+    expect(await screen.findByRole("button", { name: "تسجيل محاضرة" })).toBeTruthy();
+    cleanup();
+
+    wrap(<More />, "ar");
+    expect(await screen.findByRole("link", { name: "تسجيل محاضرة" })).toBeTruthy();
+    cleanup();
+
+    wrap(
+      <Shell>
+        <RecordLecture />
+      </Shell>,
+      "ar"
+    );
+    expect(await screen.findByRole("heading", { name: "تسجيل محاضرة صوتياً" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "مسجل المحاضرة الصوتي" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "بدء تسجيل المحاضرة" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "تسجيل محاضرة" })).toBeTruthy();
+    cleanup();
+
+    wrap(<RecordLecture />, "en");
+    expect(await screen.findByRole("heading", { name: "Record Lecture Audio" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Record Lecture" })).toBeTruthy();
+  });
+
+  it("ensures Vite & build toolchain are always present and Vercel root/app configs prevent vite: command not found", () => {
+    const pkg = JSON.parse(readFileSync(path.join(ROOT, "package.json"), "utf8")) as {
+      dependencies: Record<string, string>;
+      scripts: Record<string, string>;
+    };
+    expect(pkg.dependencies.vite).toBeTruthy();
+    expect(pkg.dependencies.typescript).toBeTruthy();
+    expect(pkg.dependencies.tailwindcss).toBeTruthy();
+    expect(pkg.dependencies["@tailwindcss/vite"]).toBeTruthy();
+    expect(pkg.dependencies["@vitejs/plugin-react"]).toBeTruthy();
+    expect(pkg.scripts.build).toBe("vite build");
+
+    const rootVercel = JSON.parse(readFileSync(path.join(ROOT, "..", "vercel.json"), "utf8")) as {
+      installCommand: string;
+      buildCommand: string;
+      outputDirectory: string;
+    };
+    expect(rootVercel.installCommand).toContain("cd note-vault-pro");
+    expect(rootVercel.installCommand).toContain("--include=dev");
+    expect(rootVercel.buildCommand).toContain("cd note-vault-pro");
+    expect(rootVercel.outputDirectory).toBe("note-vault-pro/dist");
+
+    const appVercel = JSON.parse(readFileSync(path.join(ROOT, "vercel.json"), "utf8")) as {
+      installCommand: string;
+      buildCommand: string;
+      outputDirectory: string;
+    };
+    expect(appVercel.installCommand).toContain("--include=dev");
+    expect(appVercel.buildCommand).toBe("npm run build");
+    expect(appVercel.outputDirectory).toBe("dist");
   });
 });

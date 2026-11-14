@@ -1,4 +1,5 @@
 // Presentation layer – Quick Capture modal (available from every page).
+import { Mic } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createQuickNote } from "@/services/notes";
@@ -39,6 +40,7 @@ export function QuickCapture() {
     <Modal
       open={quickOpen} onClose={() => setQuickOpen(false)} title={t("التقاط سريع", "Quick capture")}
       footer={<>
+        <Button variant="ghost" onClick={() => { setQuickOpen(false); nav("/record"); }}><Mic size={15} />{t("تسجيل صوتي", "Record audio")}</Button>
         <Button onClick={() => void save(true)} disabled={busy || !text.trim()}>{t("حفظ وفتح في المحرر", "Save & open in editor")}</Button>
         <Button variant="primary" onClick={() => void save(false)} disabled={busy || !text.trim()}>{t("حفظ", "Save")}</Button>
       </>}

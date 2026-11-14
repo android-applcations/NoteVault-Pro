@@ -1,5 +1,5 @@
 import { useLiveQuery } from "dexie-react-hooks";
-import { Archive, ArrowRight, CalendarDays, Copy, FilePlus2, Layers, LayoutGrid, List, Move, Pencil, Pin, Plus, Rows3, Trash2, GitCommitHorizontal } from "lucide-react";
+import { Archive, ArrowRight, CalendarDays, Copy, FilePlus2, Layers, LayoutGrid, List, Mic, Move, Pencil, Pin, Plus, Rows3, Trash2, GitCommitHorizontal } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { db } from "@/data/db";
@@ -12,7 +12,7 @@ import { useApp } from "@/ui/app-context";
 import { AttachmentCard, AttachmentEditModal } from "@/ui/Files";
 import { useI18n } from "@/ui/i18n";
 import { LectureForm, useStatusLabels } from "@/ui/LectureForm";
-import { Badge, Button, EmptyState, Field, Input, Modal, ProgressBar } from "@/ui/kit";
+import { Badge, Button, EmptyState, Field, IconButton, Input, Modal, ProgressBar } from "@/ui/kit";
 import { NewNoteModal } from "@/ui/NewNoteModal";
 import { Chip, Tabs, UploadZone, relTime } from "@/ui/shared";
 import type { Attachment } from "@/data/types";
@@ -46,7 +46,19 @@ function LectureItem({ l, view, onEdit, onMove }: { l: Lecture; view: View; onEd
       <div className="mt-2 max-w-xs"><ProgressBar value={l.progress} /></div>
     </button>
   );
-  return <div className={`card-surface flex items-start gap-2 ${view === "cards" ? "p-4" : "p-3"} ${l.archived ? "opacity-60" : ""}`}>{body}{menu}</div>;
+  return (
+    <div className={`card-surface flex items-start gap-2 ${view === "cards" ? "p-4" : "p-3"} ${l.archived ? "opacity-60" : ""}`}>
+      {body}
+      <IconButton
+        label={t("تسجيل صوتي للمحاضرة", "Record lecture audio")}
+        onClick={() => nav(`/lectures/${l.id}?record=1`)}
+        className="text-accent hover:bg-accent/15"
+      >
+        <Mic size={15} />
+      </IconButton>
+      {menu}
+    </div>
+  );
 }
 
 export default function SubjectPage() {
@@ -123,7 +135,8 @@ export default function SubjectPage() {
             <Chip active={sort === "date"} onClick={() => setSort("date")}>{t("حسب التاريخ", "By date")}</Chip>
             <Chip active={sort === "updated"} onClick={() => setSort("updated")}>{t("حسب آخر تحديث", "By last update")}</Chip>
             <Chip active={showArchived} onClick={() => setShowArchived((v) => !v)}>{t("المؤرشفة", "Archived")}</Chip>
-            <div className="ms-auto flex gap-2">
+            <div className="ms-auto flex flex-wrap gap-2">
+              <Button onClick={() => nav(`/record?subjectId=${id}`)}><Mic size={15} />{t("تسجيل صوتي", "Record audio")}</Button>
               <Button onClick={async () => { const n = await addWeek(id); toast(t(`أُضيف الأسبوع ${n}`, `Week ${n} added`)); }}><Plus size={15} />{t("أسبوع", "Week")}</Button>
               <Button variant="primary" onClick={() => setLecForm({ open: true })}><Plus size={15} />{t("محاضرة", "Lecture")}</Button>
             </div>

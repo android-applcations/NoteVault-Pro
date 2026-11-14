@@ -21,6 +21,7 @@ interface NavItem { to: string; icon: LucideIcon; ar: string; en: string; end?: 
 const MAIN: NavItem[] = [
   { to: "/", icon: Home, ar: "الرئيسية", en: "Home", end: true },
   { to: "/subjects", icon: BookOpen, ar: "المواد", en: "Subjects" },
+  { to: "/record", icon: Mic, ar: "تسجيل محاضرة", en: "Record lecture" },
   { to: "/notes", icon: NotebookText, ar: "الملاحظات", en: "Notes" },
   { to: "/library", icon: FolderOpen, ar: "المكتبة", en: "Library" },
   { to: "/flashcards", icon: Layers, ar: "البطاقات", en: "Flashcards" },
@@ -148,6 +149,18 @@ export function Shell({ children }: { children: ReactNode }) {
                 placeholder={t("ابحث في ملاحظاتك وملفاتك…", "Search notes & files…")} className="h-10 w-full min-w-0 rounded-xl border border-line bg-surface ps-9 pe-3 text-sm placeholder:text-muted/70 focus:border-accent" />
             </form>
             <div className="ms-auto flex shrink-0 items-center gap-1">
+              <IconButton
+                label={t("تسجيل محاضرة صوتياً", "Record lecture")}
+                onClick={() => nav(recorder.lectureId ? `/lectures/${recorder.lectureId}` : "/record")}
+                className={cn(
+                  "hidden min-[380px]:inline-flex",
+                  recorder.phase === "recording" || recorder.phase === "paused"
+                    ? "bg-danger/15 text-danger hover:bg-danger/25"
+                    : "text-accent hover:bg-accent/15"
+                )}
+              >
+                <Mic size={18} />
+              </IconButton>
               <IconButton label={t("التقاط سريع", "Quick capture")} onClick={() => setQuickOpen(true)} className="bg-accent/15 text-accent hover:bg-accent/25"><Zap size={18} /></IconButton>
               <IconButton label={t("تبديل اللغة", "Switch language")} onClick={() => setPrefs({ lang: lang === "ar" ? "en" : "ar" })}><Languages size={18} /></IconButton>
               <IconButton label={t("تبديل المظهر", "Toggle theme")} onClick={() => setPrefs({ theme: dark ? "light" : "dark" })}>{dark ? <Sun size={18} /> : <Moon size={18} />}</IconButton>
@@ -170,8 +183,8 @@ export function Shell({ children }: { children: ReactNode }) {
             <motion.button whileTap={{ scale: 0.9 }} onClick={() => void newNote()} aria-label={t("ملاحظة جديدة", "New note")}
               className="-mt-7 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-accent text-white shadow-xl shadow-primary/30"><Plus size={26} /></motion.button>
           </div>
-          <MobileLink n={MAIN[2]} />
-          <MobileLink n={{ to: "/more", icon: MoreHorizontal, ar: "المزيد", en: "More" }} extra={[MAIN[3].to]} />
+          <MobileLink n={MAIN[3]} />
+          <MobileLink n={{ to: "/more", icon: MoreHorizontal, ar: "المزيد", en: "More" }} extra={[MAIN[4].to, MAIN[2].to]} />
         </div>
       </nav>
 
@@ -196,9 +209,9 @@ export function Shell({ children }: { children: ReactNode }) {
           />
           <button
             type="button"
-            onClick={() => recorder.lectureId && nav(`/lectures/${recorder.lectureId}`)}
+            onClick={() => nav(recorder.lectureId ? `/lectures/${recorder.lectureId}` : "/record")}
             className="flex items-center gap-1.5 text-xs font-extrabold hover:text-primary"
-            title={t("العودة إلى المحاضرة", "Go to lecture")}
+            title={t("العودة إلى المسجل", "Go to recorder")}
           >
             <Mic size={14} className="text-danger" />
             <span className="max-w-[110px] truncate">{recorder.title || t("تسجيل محاضرة", "Recording")}</span>

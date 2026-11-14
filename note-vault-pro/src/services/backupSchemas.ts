@@ -364,7 +364,7 @@ const CalEventSchema = z.object({
 const RecordingSchema = z.object({
   id: idSchema,
   subjectId: optId,
-  lectureId: idSchema,
+  lectureId: optId,
   attachmentId: optId,
   noteId: optId,
   title: shortStr(300).min(1),

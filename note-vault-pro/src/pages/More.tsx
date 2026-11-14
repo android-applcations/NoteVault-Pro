@@ -1,4 +1,4 @@
-import { Bookmark, CalendarDays, ClipboardCheck, FolderOpen, GraduationCap, Layers, Search, Settings, Trash2, Zap } from "lucide-react";
+import { Bookmark, CalendarDays, ClipboardCheck, FolderOpen, GraduationCap, Layers, Mic, Search, Settings, Trash2, Zap } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useApp } from "@/ui/app-context";
 import { useI18n } from "@/ui/i18n";
@@ -8,6 +8,7 @@ export default function More() {
   const { t } = useI18n();
   const { setQuickOpen } = useApp();
   const items = [
+    { to: "/record", icon: Mic, l: t("تسجيل محاضرة", "Record lecture") },
     { to: "/library", icon: FolderOpen, l: t("مكتبة الملفات", "File vault") }, { to: "/flashcards", icon: Layers, l: t("البطاقات", "Flashcards") },
     { to: "/quizzes", icon: ClipboardCheck, l: t("الاختبارات", "Quizzes") }, { to: "/references", icon: Bookmark, l: t("المراجع", "References") },
     { to: "/calendar", icon: CalendarDays, l: t("التقويم", "Calendar") }, { to: "/semesters", icon: GraduationCap, l: t("الفصول", "Semesters") },

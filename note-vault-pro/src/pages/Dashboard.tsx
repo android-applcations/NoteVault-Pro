@@ -1,6 +1,6 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { motion } from "motion/react";
-import { BookOpen, ClipboardCheck, Clock, FileText, FolderOpen, Layers, NotebookText, Play, Plus, Sparkles, Zap, Activity as ActIcon } from "lucide-react";
+import { BookOpen, ClipboardCheck, Clock, FileText, FolderOpen, Layers, Mic, NotebookText, Play, Plus, Sparkles, Zap, Activity as ActIcon } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { db } from "@/data/db";
 import { safeCssColor, safeDataImageUrl } from "@/domain/sanitize";
@@ -52,6 +52,7 @@ export default function Dashboard() {
         </p>
         <div className="mt-5 flex flex-wrap gap-2">
           <Button className="bg-white text-[#2b2a6f] hover:bg-white/90" onClick={() => nav("/flashcards/review")} disabled={d.due === 0}><Play size={16} />{t("ابدأ المراجعة", "Start review")}</Button>
+          <Button className="bg-white/15 text-white hover:bg-white/25 border-0" onClick={() => nav("/record")}><Mic size={16} />{t("تسجيل محاضرة", "Record lecture")}</Button>
           <Button className="bg-white/15 text-white hover:bg-white/25 border-0" onClick={async () => nav(`/notes/${(await createNote({})).id}`)}><Plus size={16} />{t("ملاحظة جديدة", "New note")}</Button>
           <Button className="bg-white/15 text-white hover:bg-white/25 border-0" onClick={() => setQuickOpen(true)}><Zap size={16} />{t("التقاط سريع", "Quick capture")}</Button>
         </div>
