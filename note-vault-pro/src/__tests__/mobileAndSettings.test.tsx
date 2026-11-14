@@ -84,9 +84,11 @@ describe("Mobile/iPad experience, zoom/selection/status-bar contracts, and Setti
     expect(screen.queryByRole("heading", { name: "الخصوصية" })).toBeNull();
     expect(screen.queryByText(/تخزين المتصفح|SHA-256|Whisper|Safari|Chrome/)).toBeNull();
 
+    expect(screen.getByRole("heading", { name: "أذونات التطبيق" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "مساحة التخزين" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "النسخ الاحتياطي والاستعادة" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "التفريغ الصوتي للمحاضرات" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /منح جميع الأذونات/ })).toBeNull();
     expect(screen.getByRole("button", { name: "تصدير نسخة كاملة" })).toBeTruthy();
     expect(await screen.findByRole("button", { name: "فحص سلامة البيانات" })).toBeTruthy();
 
@@ -102,7 +104,12 @@ describe("Mobile/iPad experience, zoom/selection/status-bar contracts, and Setti
     await screen.findByRole("heading", { name: "Settings" });
     expect(screen.queryByRole("heading", { name: "Install on your device" })).toBeNull();
     expect(screen.queryByRole("heading", { name: "Privacy" })).toBeNull();
-    expect(screen.queryByText(/browser storage|SHA-256|Whisper|Add to Home Screen/i)).toBeNull();
+    expect(
+      screen.queryByText(
+        /browser storage|SHA-256|Whisper|Add to Home Screen|Service Worker|Manifest|Cache Storage|Permission API|Secure Context|WebAssembly/i
+      )
+    ).toBeNull();
+    expect(screen.getByRole("heading", { name: "App permissions" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Lecture Transcription" })).toBeTruthy();
   });
 
@@ -257,8 +264,8 @@ describe("Mobile/iPad experience, zoom/selection/status-bar contracts, and Setti
       fireEvent.click(recordBtn);
 
       expect(await screen.findByRole("alert")).toBeTruthy();
-      expect(screen.getByText("إذن الميكروفون غير مفعّل بعد")).toBeTruthy();
-      expect(screen.getByRole("button", { name: "طلب إذن الميكروفون" })).toBeTruthy();
+      expect(screen.getByText("لم يتم السماح باستخدام الميكروفون")).toBeTruthy();
+      expect(screen.getByRole("button", { name: "إعادة المحاولة" })).toBeTruthy();
       expect(screen.getByRole("button", { name: "استيراد ملف صوتي بدلاً من ذلك" })).toBeTruthy();
     } finally {
       Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: origDevices });

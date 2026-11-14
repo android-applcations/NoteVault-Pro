@@ -47,11 +47,16 @@ function pwaManifestAndPrecachePlugin(): Plugin {
       const indexPath = path.join(distDir, "index.html");
       if (!existsSync(swPath) || !existsSync(manifestPath) || !existsSync(indexPath)) return;
 
-      // Verify manifest icons exist on disk
+      // Verify manifest icons & shortcut icons exist on disk
       const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
         icons?: Array<{ src: string }>;
+        shortcuts?: Array<{ icons?: Array<{ src: string }> }>;
       };
-      for (const ic of manifest.icons ?? []) {
+      const allManifestIcons = [
+        ...(manifest.icons ?? []),
+        ...(manifest.shortcuts ?? []).flatMap((s) => s.icons ?? []),
+      ];
+      for (const ic of allManifestIcons) {
         const clean = ic.src.replace(/^\.\//, "");
         if (!existsSync(path.join(distDir, clean))) {
           throw new Error(`PWA verification failed: manifest icon missing in dist: ${ic.src}`);

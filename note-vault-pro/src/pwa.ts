@@ -1,22 +1,42 @@
-// PWA and offline layer – service worker registration, update detection and install prompt.
+// PWA and offline layer – service worker registration, safe update deferrals, and install detection.
 import { useEffect, useState } from "react";
+import { isStandaloneMode } from "@/services/permissions";
 
 let updateRequested = false;
+let pendingApply: (() => void) | null = null;
+let safetyCheckFn: (() => boolean) | null = null;
 
-export function registerServiceWorker(onUpdate: (apply: () => void) => void) {
+export function registerServiceWorker(
+  onUpdate: (apply: () => void) => void,
+  canApplySafely?: () => boolean
+) {
+  safetyCheckFn = canApplySafely ?? null;
   if (!("serviceWorker" in navigator) || !/^https?:$/.test(location.protocol)) return;
+
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (updateRequested) location.reload();
+    if (!updateRequested) return;
+    if (safetyCheckFn && !safetyCheckFn()) {
+      // Never interrupt an active recording or save operation with an abrupt reload
+      updateRequested = false;
+      return;
+    }
+    location.reload();
   });
+
   const go = () => {
     navigator.serviceWorker
       .register("./sw.js", { updateViaCache: "none" })
       .then((reg) => {
-        const offer = (w: ServiceWorker) =>
-          onUpdate(() => {
+        const offer = (w: ServiceWorker) => {
+          pendingApply = () => {
+            if (safetyCheckFn && !safetyCheckFn()) {
+              return;
+            }
             updateRequested = true;
             w.postMessage({ type: "SKIP_WAITING" });
-          });
+          };
+          onUpdate(pendingApply);
+        };
         if (reg.waiting && navigator.serviceWorker.controller) offer(reg.waiting);
         reg.addEventListener("updatefound", () => {
           const nw = reg.installing;
@@ -60,10 +80,8 @@ export function useInstall() {
     listeners.add(l);
     return () => void listeners.delete(l);
   }, []);
-  const standalone =
-    window.matchMedia("(display-mode: standalone)").matches ||
-    (navigator as unknown as { standalone?: boolean }).standalone === true;
-  const ua = navigator.userAgent;
+  const standalone = isStandaloneMode();
+  const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
   const ios = /iphone|ipad|ipod/i.test(ua) || (/macintosh/i.test(ua) && navigator.maxTouchPoints > 1);
   const android = /android/i.test(ua);
   return {
