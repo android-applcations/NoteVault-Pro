@@ -10,6 +10,7 @@ import {
 } from "./recordings";
 
 export type RecorderPhase = "idle" | "requesting_mic" | "recording" | "paused" | "saving" | "error";
+export type MicPermissionState = "unknown" | "prompt" | "granted" | "denied";
 
 export interface RecorderSnapshot {
   phase: RecorderPhase;
@@ -24,6 +25,113 @@ export interface RecorderSnapshot {
   level: number; // 0..1 normalized mic RMS
   error: string | null;
   micSupported: boolean;
+  permissionState: MicPermissionState;
+}
+
+function detectMicSupported(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const legacyNav = navigator as unknown as {
+    webkitGetUserMedia?: unknown;
+    mozGetUserMedia?: unknown;
+  };
+  const hasGUM = Boolean(
+    navigator.mediaDevices?.getUserMedia || legacyNav.webkitGetUserMedia || legacyNav.mozGetUserMedia
+  );
+  return hasGUM && typeof MediaRecorder !== "undefined";
+}
+
+function isEmbeddedFrame(): boolean {
+  try {
+    return typeof window !== "undefined" && window.self !== window.top;
+  } catch {
+    return true;
+  }
+}
+
+function mapMicError(err: unknown): string {
+  if (typeof window !== "undefined" && window.isSecureContext === false) {
+    return "MIC_INSECURE_CONTEXT";
+  }
+  const name = err instanceof DOMException || err instanceof Error ? err.name : "";
+  const msg = err instanceof Error ? err.message : String(err);
+  if (
+    msg === "MIC_INSECURE_CONTEXT" ||
+    msg === "MIC_IFRAME_BLOCKED" ||
+    msg === "MIC_PERMISSION_DENIED" ||
+    msg === "MIC_NOT_FOUND" ||
+    msg === "MIC_IN_USE" ||
+    msg === "MIC_UNSUPPORTED"
+  ) {
+    return msg;
+  }
+  if (name === "NotAllowedError" || name === "PermissionDeniedError") {
+    return isEmbeddedFrame() ? "MIC_IFRAME_BLOCKED" : "MIC_PERMISSION_DENIED";
+  }
+  if (name === "SecurityError") {
+    return isEmbeddedFrame() ? "MIC_IFRAME_BLOCKED" : "MIC_PERMISSION_DENIED";
+  }
+  if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+    return "MIC_NOT_FOUND";
+  }
+  if (name === "NotReadableError" || name === "TrackStartError" || name === "AbortError") {
+    return "MIC_IN_USE";
+  }
+  if (name === "OverconstrainedError" || name === "ConstraintNotSatisfiedError") {
+    return "MIC_UNSUPPORTED";
+  }
+  return msg || "MIC_UNSUPPORTED";
+}
+
+async function getUserMediaRaw(constraints: MediaStreamConstraints): Promise<MediaStream> {
+  if (navigator.mediaDevices?.getUserMedia) {
+    return navigator.mediaDevices.getUserMedia(constraints);
+  }
+  const legacy = (navigator as unknown as {
+    webkitGetUserMedia?: (
+      c: MediaStreamConstraints,
+      ok: (s: MediaStream) => void,
+      err: (e: unknown) => void
+    ) => void;
+    mozGetUserMedia?: (
+      c: MediaStreamConstraints,
+      ok: (s: MediaStream) => void,
+      err: (e: unknown) => void
+    ) => void;
+  });
+  const fn = legacy.webkitGetUserMedia ?? legacy.mozGetUserMedia;
+  if (!fn) throw new Error("MIC_UNSUPPORTED");
+  return new Promise<MediaStream>((resolve, reject) => {
+    fn.call(navigator, constraints, resolve, reject);
+  });
+}
+
+async function acquireMicrophoneStream(): Promise<MediaStream> {
+  if (typeof window !== "undefined" && window.isSecureContext === false) {
+    throw new Error("MIC_INSECURE_CONTEXT");
+  }
+  if (typeof navigator === "undefined") {
+    throw new Error("MIC_UNSUPPORTED");
+  }
+  try {
+    return await getUserMediaRaw({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    });
+  } catch (err) {
+    const name = err instanceof DOMException || err instanceof Error ? err.name : "";
+    if (
+      name === "OverconstrainedError" ||
+      name === "ConstraintNotSatisfiedError" ||
+      name === "TypeError" ||
+      name === "NotSupportedError"
+    ) {
+      return await getUserMediaRaw({ audio: true });
+    }
+    throw err;
+  }
 }
 
 class LectureRecorderController {
@@ -39,11 +147,10 @@ class LectureRecorderController {
     chunkCount: 0,
     level: 0,
     error: null,
-    micSupported:
-      typeof navigator !== "undefined" &&
-      Boolean(navigator.mediaDevices?.getUserMedia) &&
-      typeof MediaRecorder !== "undefined",
+    micSupported: detectMicSupported(),
+    permissionState: "unknown",
   };
+  private permStatusRef: PermissionStatus | null = null;
 
   private listeners = new Set<(s: RecorderSnapshot) => void>();
   private stream: MediaStream | null = null;
@@ -73,6 +180,77 @@ class LectureRecorderController {
 
   getSnapshot(): RecorderSnapshot {
     return { ...this.snap };
+  }
+
+  async refreshPermissionState(): Promise<MicPermissionState> {
+    const supported = detectMicSupported();
+    if (supported !== this.snap.micSupported) {
+      this.update({ micSupported: supported });
+    }
+    if (typeof navigator === "undefined" || !navigator.permissions?.query) {
+      return this.snap.permissionState;
+    }
+    try {
+      const status = await navigator.permissions.query({ name: "microphone" as PermissionName });
+      const mapped: MicPermissionState =
+        status.state === "granted" || status.state === "denied" || status.state === "prompt"
+          ? status.state
+          : "unknown";
+      if (!this.permStatusRef || this.permStatusRef !== status) {
+        this.permStatusRef = status;
+        status.onchange = () => {
+          const nextState: MicPermissionState =
+            status.state === "granted" || status.state === "denied" || status.state === "prompt"
+              ? status.state
+              : "unknown";
+          const clearDeniedErr =
+            nextState === "granted" &&
+            (this.snap.error === "MIC_PERMISSION_DENIED" || this.snap.error === "MIC_IFRAME_BLOCKED");
+          this.update({
+            permissionState: nextState,
+            ...(clearDeniedErr ? { error: null, phase: this.snap.phase === "error" ? "idle" : this.snap.phase } : {}),
+          });
+        };
+      }
+      const clearErr =
+        mapped === "granted" &&
+        (this.snap.error === "MIC_PERMISSION_DENIED" || this.snap.error === "MIC_IFRAME_BLOCKED");
+      this.update({
+        permissionState: mapped,
+        ...(clearErr ? { error: null, phase: this.snap.phase === "error" ? "idle" : this.snap.phase } : {}),
+      });
+      return mapped;
+    } catch {
+      return this.snap.permissionState;
+    }
+  }
+
+  async requestMicrophoneAccess(): Promise<boolean> {
+    const supported = detectMicSupported();
+    this.update({ micSupported: supported });
+    if (typeof window !== "undefined" && window.isSecureContext === false) {
+      this.update({ phase: "error", error: "MIC_INSECURE_CONTEXT" });
+      throw new Error("MIC_INSECURE_CONTEXT");
+    }
+    try {
+      const stream = await acquireMicrophoneStream();
+      for (const tr of stream.getTracks()) tr.stop();
+      this.update({
+        permissionState: "granted",
+        error: null,
+        phase: this.snap.phase === "error" ? "idle" : this.snap.phase,
+        micSupported: detectMicSupported(),
+      });
+      return true;
+    } catch (err) {
+      const code = mapMicError(err);
+      this.update({
+        phase: "error",
+        error: code,
+        ...(code === "MIC_PERMISSION_DENIED" ? { permissionState: "denied" as const } : {}),
+      });
+      throw new Error(code);
+    }
   }
 
   private update(patch: Partial<RecorderSnapshot>) {
@@ -201,9 +379,11 @@ class LectureRecorderController {
     if (this.snap.phase !== "idle" && this.snap.phase !== "error") {
       throw new Error("RECORDER_ALREADY_ACTIVE");
     }
-    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
-      this.update({ phase: "error", error: "MIC_UNSUPPORTED", micSupported: false });
-      throw new Error("MIC_UNSUPPORTED");
+    const supported = detectMicSupported();
+    if (!supported || typeof MediaRecorder === "undefined") {
+      const code = typeof window !== "undefined" && window.isSecureContext === false ? "MIC_INSECURE_CONTEXT" : "MIC_UNSUPPORTED";
+      this.update({ phase: "error", error: code, micSupported: supported });
+      throw new Error(code);
     }
 
     const choice = probeSupportedRecordingMime();
@@ -219,27 +399,38 @@ class LectureRecorderController {
       chunkCount: 0,
       level: 0,
       error: null,
+      micSupported: supported,
     });
 
+    let createdSessionId: string | null = null;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      });
+      const stream = await acquireMicrophoneStream();
       this.stream = stream;
+      this.update({ permissionState: "granted" });
+
+      let mr: MediaRecorder;
+      try {
+        mr = new MediaRecorder(stream, { mimeType: choice.mime, audioBitsPerSecond: 64000 });
+      } catch {
+        try {
+          mr = new MediaRecorder(stream, { mimeType: choice.mime });
+        } catch {
+          mr = new MediaRecorder(stream);
+        }
+      }
+      const actualBaseMime = (mr.mimeType || choice.baseMime).split(";")[0].trim().toLowerCase() || choice.baseMime;
+      const actualExt = actualBaseMime.includes("mp4") ? "m4a" : actualBaseMime.includes("ogg") ? "ogg" : "webm";
 
       const deviceLabel = stream.getAudioTracks()[0]?.label;
       const session = await startRecordingSessionRecord({
         subjectId: opts.subjectId,
         lectureId: opts.lectureId || undefined,
         title: opts.title,
-        mime: choice.baseMime,
-        ext: choice.ext,
+        mime: actualBaseMime,
+        ext: actualExt,
         deviceLabel,
       });
+      createdSessionId = session.id;
 
       // Best-effort mic level analyser
       try {
@@ -249,6 +440,7 @@ class LectureRecorderController {
             : (globalThis as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
         if (AudioCtx) {
           const ctx = new AudioCtx();
+          if (ctx.state === "suspended") void ctx.resume().catch(() => undefined);
           const source = ctx.createMediaStreamSource(stream);
           const analyser = ctx.createAnalyser();
           analyser.fftSize = 256;
@@ -261,12 +453,6 @@ class LectureRecorderController {
         /* meter optional */
       }
 
-      let mr: MediaRecorder;
-      try {
-        mr = new MediaRecorder(stream, { mimeType: choice.mime, audioBitsPerSecond: 64000 });
-      } catch {
-        mr = new MediaRecorder(stream);
-      }
       this.mediaRecorder = mr;
       this.chunkQueue = Promise.resolve();
       this.accumulatedActiveMs = 0;
@@ -290,7 +476,7 @@ class LectureRecorderController {
               recordingId: recId,
               seq,
               blob,
-              mime: choice.baseMime,
+              mime: actualBaseMime,
               durationMs,
               startMs,
               endMs,
@@ -326,24 +512,30 @@ class LectureRecorderController {
         phase: "recording",
         recordingId: session.id,
         title: session.title,
+        mime: actualBaseMime,
       });
 
       this.attachUnloadGuard(true);
       await this.requestWakeLock();
       this.startMeters();
-      mr.start(opts.timesliceMs ?? 15_000);
+      try {
+        mr.start(opts.timesliceMs ?? 15_000);
+      } catch {
+        mr.start();
+      }
       return session.id;
     } catch (err) {
       this.cleanupHardware();
-      const msg =
-        err instanceof DOMException && (err.name === "NotAllowedError" || err.name === "PermissionDeniedError")
-          ? "MIC_PERMISSION_DENIED"
-          : err instanceof DOMException && err.name === "NotFoundError"
-            ? "MIC_NOT_FOUND"
-            : err instanceof Error
-              ? err.message
-              : String(err);
-      this.update({ phase: "error", recordingId: null, error: msg });
+      if (createdSessionId) {
+        await discardRecordingSession(createdSessionId).catch(() => undefined);
+      }
+      const msg = mapMicError(err);
+      this.update({
+        phase: "error",
+        recordingId: null,
+        error: msg,
+        ...(msg === "MIC_PERMISSION_DENIED" ? { permissionState: "denied" as const } : {}),
+      });
       throw new Error(msg);
     }
   }
