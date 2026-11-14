@@ -61,7 +61,7 @@ export function safeCssSize(input: unknown): string | null {
 const NODES = new Set([
   "doc", "paragraph", "text", "heading", "bulletList", "orderedList", "listItem", "taskList", "taskItem",
   "blockquote", "horizontalRule", "codeBlock", "hardBreak", "table", "tableRow", "tableCell", "tableHeader",
-  "image", "callout",
+  "image", "callout", "audioTimestamp",
 ]);
 const MARKS = new Set(["bold", "italic", "underline", "strike", "link", "highlight", "textStyle", "code", "formula"]);
 const MAX_DEPTH = 40;
@@ -88,6 +88,14 @@ function cleanAttrs(type: string, attrs: Record<string, unknown> | undefined): R
       if (typeof attrs.attId === "string" && UUID.test(attrs.attId)) out.attId = attrs.attId;
       if (typeof attrs.alt === "string") out.alt = attrs.alt.slice(0, 500);
       break;
+    case "audioTimestamp": {
+      if (typeof attrs.recordingId === "string" && UUID.test(attrs.recordingId)) out.recordingId = attrs.recordingId;
+      if (typeof attrs.attachmentId === "string" && UUID.test(attrs.attachmentId)) out.attachmentId = attrs.attachmentId;
+      const ms = Number(attrs.timeMs);
+      out.timeMs = Number.isFinite(ms) && ms >= 0 && ms < 86_400_000 ? Math.round(ms) : 0;
+      if (typeof attrs.label === "string") out.label = attrs.label.slice(0, 120);
+      break;
+    }
     case "tableCell":
     case "tableHeader": {
       for (const k of ["colspan", "rowspan"] as const) {
@@ -133,6 +141,12 @@ export function sanitizeDoc(input: unknown): JSONContent | null {
     const type = node.type;
     if (typeof type !== "string" || !NODES.has(type)) return null;
     if (type === "image" && !(node.attrs as Record<string, unknown> | undefined)?.attId) return null;
+    if (type === "audioTimestamp") {
+      const a = node.attrs as Record<string, unknown> | undefined;
+      if (!a || (!(typeof a.recordingId === "string" && UUID.test(a.recordingId)) && !(typeof a.attachmentId === "string" && UUID.test(a.attachmentId)))) {
+        return null;
+      }
+    }
     const out: JSONContent = { type };
     const attrs = cleanAttrs(type, node.attrs as Record<string, unknown> | undefined);
     if (attrs) out.attrs = attrs;

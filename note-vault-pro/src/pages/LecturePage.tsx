@@ -9,6 +9,7 @@ import { useApp } from "@/ui/app-context";
 import { AttachmentCard, AttachmentEditModal } from "@/ui/Files";
 import { useI18n } from "@/ui/i18n";
 import { LectureForm, useStatusLabels } from "@/ui/LectureForm";
+import { LectureRecorderPanel } from "@/ui/LectureRecorderPanel";
 import { Badge, Button, EmptyState, ProgressBar } from "@/ui/kit";
 import { NewNoteModal } from "@/ui/NewNoteModal";
 import { Chip, UploadZone } from "@/ui/shared";
@@ -63,6 +64,10 @@ export default function LecturePage() {
         {notes.length === 0 ? <EmptyState icon={<FilePlus2 />} title={t("لا توجد ملاحظات لهذه المحاضرة", "No notes for this lecture")} action={<Button variant="primary" onClick={() => setNewNote(true)}>{t("ابدأ بقالب جاهز", "Start from a template")}</Button>} /> : (
           <div className="grid gap-2 sm:grid-cols-2">{notes.map((n) => <Link key={n.id} to={`/notes/${n.id}`} className="card-surface p-4 hover:border-accent"><div className="truncate font-extrabold" dir="auto">{n.title || t("بدون عنوان", "Untitled")}</div><p className="mt-1 line-clamp-2 text-sm text-muted" dir="auto">{n.text.slice(0, 140)}</p></Link>)}</div>
         )}
+      </section>
+
+      <section>
+        <LectureRecorderPanel lectureId={id} subjectId={lecture.subjectId} lectureTitle={lecture.title} />
       </section>
 
       <section>

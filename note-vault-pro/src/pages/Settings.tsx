@@ -1,6 +1,9 @@
 import { useLiveQuery } from "dexie-react-hooks";
-import { Archive, Download, HardDrive, Monitor, Moon, RefreshCw, ShieldCheck, Smartphone, Sun, Upload } from "lucide-react";
+import { Archive, CheckCircle2, Download, FolderUp, HardDrive, Mic, Monitor, Moon, RefreshCw, ShieldAlert, ShieldCheck, Smartphone, Sun, Trash2, Upload, X } from "lucide-react";
 import { useRef, useState } from "react";
+import { deleteInstalledModel, downloadCatalogModel, importLocalModelPack, verifyInstalledModel, type DownloadProgress } from "@/asr/modelManager";
+import { ASR_CATALOG } from "@/asr/models";
+import type { AsrModelRecord } from "@/data/types";
 import { formatBytes } from "@/domain/text";
 import { useInstall } from "@/pwa";
 import { applyBackup, BackupError, exportBackup, exportNotesText, parseBackup, previewBackup, type ImportMode, type ParsedBackup } from "@/services/backup";
@@ -32,8 +35,12 @@ export default function Settings() {
   const maxVersions = useLiveQuery(async () => ((await db.appSettings.get("maxVersions"))?.value as number) ?? DEFAULT_MAX_VERSIONS, []);
   const keepOriginal = useLiveQuery(async () => ((await db.appSettings.get("keepOriginalImages"))?.value as boolean) ?? false, []);
   const pdfIndexLimit = useLiveQuery(async () => ((await db.appSettings.get("pdfIndexLimit"))?.value as number) ?? 1500, []);
+  const installedAsrModels: AsrModelRecord[] = useLiveQuery(() => db.asrModels.toArray(), [], []) ?? [];
   const fileRef = useRef<HTMLInputElement>(null);
+  const asrPackRef = useRef<HTMLInputElement>(null);
+  const asrAbortRef = useRef<AbortController | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [asrProgress, setAsrProgress] = useState<Record<string, DownloadProgress>>({});
   const [parsed, setParsed] = useState<ParsedBackup | null>(null);
   const [mode, setMode] = useState<ImportMode>("merge");
   const [integrity, setIntegrity] = useState<IntegrityReport | null>(null);
@@ -131,6 +138,216 @@ export default function Settings() {
           <Button disabled={!!busy} onClick={async () => { saveBlob(await exportNotesText(), "notevault-notes.zip"); }}><Download size={16} />{t("تصدير الملاحظات (Markdown)", "Export notes (Markdown)")}</Button>
           <Button disabled={!!busy} onClick={() => fileRef.current?.click()}><Upload size={16} />{busy === "parse" ? t("جارٍ الفحص…", "Checking…") : t("استيراد نسخة", "Import backup")}</Button>
           <input ref={fileRef} type="file" accept=".zip,application/zip" className="sr-only" aria-label={t("اختيار ملف نسخة احتياطية", "Choose backup file")} onChange={(e) => void pick(e.target.files?.[0])} />
+        </div>
+      </Section>
+
+      <Section title={t("نماذج التفريغ الصوتي المحلي (بدون إنترنت)", "Offline Speech Recognition Models")} icon={<Mic size={18} />}>
+        <p className="mb-3 text-sm text-muted">
+          {t(
+            "حمّل نموذج Whisper مرة واحدة ليُحفظ محليًا في المتصفح مع التحقق من SHA-256، أو استورد حزمة نموذج محلية (.zip) للعمل دون اتصال كامل.",
+            "Download a Whisper model once into local browser storage with SHA-256 verification, or import a local model pack (.zip) for 100% offline transcription."
+          )}
+        </p>
+
+        <div className="space-y-3">
+          {ASR_CATALOG.map((entry) => {
+            const installed = installedAsrModels.find((m) => m.id === entry.id);
+            const prog = asrProgress[entry.id];
+            const isDownloading = busy === `asr-dl-${entry.id}` || installed?.status === "downloading";
+            const pct = prog && prog.totalBytes > 0 ? Math.min(100, Math.round((prog.downloadedBytes / prog.totalBytes) * 100)) : 0;
+            return (
+              <div key={entry.id} className="rounded-xl border border-line bg-surface2/60 p-3.5">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-extrabold">{t(entry.nameAr, entry.nameEn)}</span>
+                      <Badge color={entry.supportsArabic ? "#0b8579" : undefined}>
+                        {entry.languages.join(" / ").toUpperCase()}
+                      </Badge>
+                      {installed?.status === "ready" && (
+                        <Badge color="#15803d">
+                          <CheckCircle2 size={11} /> {t("مثبت وموثق", "Installed")}
+                        </Badge>
+                      )}
+                      {installed?.status === "error" && (
+                        <Badge color="#c42a3b">
+                          <ShieldAlert size={11} /> {t("خطأ / بحاجة لإعادة تنزيل", "Corrupted / Error")}
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="mt-1 text-xs text-muted">{t(entry.descriptionAr, entry.descriptionEn)}</p>
+                    {installed?.status === "ready" && (
+                      <div className="mt-1 text-[11px] text-muted" dir="ltr">
+                        {formatBytes(installed.sizeBytes)} · SHA-256 verified
+                      </div>
+                    )}
+                    {installed?.status === "error" && installed.error && (
+                      <div className="mt-1 text-[11px] font-bold text-danger" dir="ltr">
+                        {installed.error}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {isDownloading ? (
+                      <Button
+                        variant="danger"
+                        className="h-9 text-xs"
+                        onClick={() => {
+                          asrAbortRef.current?.abort();
+                        }}
+                      >
+                        <X size={14} /> {t("إلغاء", "Cancel")} ({pct}%)
+                      </Button>
+                    ) : installed?.status === "ready" ? (
+                      <>
+                        <Button
+                          className="h-9 text-xs"
+                          disabled={!!busy}
+                          onClick={async () => {
+                            setBusy(`asr-verify-${entry.id}`);
+                            try {
+                              await verifyInstalledModel(entry.id);
+                              toast(t("تم التحقق من سلامة النموذج بنجاح (SHA-256)", "Model SHA-256 integrity verified"));
+                            } catch (e) {
+                              toast(e instanceof Error ? e.message : t("فشل التحقق", "Verification failed"), "err");
+                            } finally {
+                              setBusy(null);
+                            }
+                          }}
+                        >
+                          <ShieldCheck size={14} /> {t("فحص السلامة", "Verify")}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          className="h-9 text-xs text-danger"
+                          disabled={!!busy}
+                          onClick={async () => {
+                            if (!(await confirm({ title: t("حذف النموذج المحلي؟", "Delete cached model?"), danger: true }))) return;
+                            await deleteInstalledModel(entry.id);
+                            toast(t("تم حذف النموذج من الجهاز", "Model removed"));
+                          }}
+                        >
+                          <Trash2 size={14} /> {t("حذف", "Delete")}
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        variant="primary"
+                        className="h-9 text-xs"
+                        disabled={!!busy}
+                        onClick={async () => {
+                          const ac = new AbortController();
+                          asrAbortRef.current = ac;
+                          setBusy(`asr-dl-${entry.id}`);
+                          try {
+                            await downloadCatalogModel(entry.id, {
+                              signal: ac.signal,
+                              onProgress: (p) => setAsrProgress((cur) => ({ ...cur, [entry.id]: p })),
+                            });
+                            toast(t("تم تنزيل وتوثيق النموذج بنجاح", "Model downloaded & verified"));
+                          } catch (e) {
+                            const aborted = e instanceof DOMException && e.name === "AbortError";
+                            toast(
+                              aborted
+                                ? t("تم إلغاء التنزيل", "Download cancelled")
+                                : t("تعذر تنزيل النموذج — تحقق من الاتصال أو استورد حزمة محلية", "Model download failed — check network or import a local pack"),
+                              aborted ? "info" : "err"
+                            );
+                          } finally {
+                            asrAbortRef.current = null;
+                            setBusy(null);
+                          }
+                        }}
+                      >
+                        <Download size={14} /> {t("تنزيل للاستخدام المحلي", "Download")}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                {isDownloading && prog && (
+                  <div className="mt-2.5">
+                    <div className="mb-1 flex justify-between text-[11px] font-bold text-muted" dir="ltr">
+                      <span>{prog.currentFile}</span>
+                      <span>{formatBytes(prog.downloadedBytes)} / {formatBytes(prog.totalBytes)}</span>
+                    </div>
+                    <ProgressBar value={pct} />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {installedAsrModels
+            .filter((m) => !ASR_CATALOG.some((c) => c.id === m.id))
+            .map((m) => (
+              <div key={m.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line bg-surface2/60 p-3.5">
+                <div>
+                  <div className="flex items-center gap-2 font-extrabold">
+                    <span>{m.name}</span>
+                    <Badge color="#0b8579">{m.languages.join(" / ").toUpperCase()}</Badge>
+                    <Badge color={m.status === "ready" ? "#15803d" : "#c42a3b"}>{m.status}</Badge>
+                  </div>
+                  <div className="text-xs text-muted" dir="ltr">{formatBytes(m.sizeBytes)} · {m.repoId}</div>
+                </div>
+                <div className="flex gap-1.5">
+                  <Button
+                    className="h-9 text-xs"
+                    onClick={async () => {
+                      try {
+                        await verifyInstalledModel(m.id);
+                        toast(t("تم التحقق من سلامة النموذج", "Model integrity verified"));
+                      } catch {
+                        toast(t("فشل التحقق من سلامة الملفات", "Integrity check failed"), "err");
+                      }
+                    }}
+                  >
+                    <ShieldCheck size={14} /> {t("فحص", "Verify")}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="h-9 text-xs text-danger"
+                    onClick={() => void deleteInstalledModel(m.id)}
+                  >
+                    <Trash2 size={14} />
+                  </Button>
+                </div>
+              </div>
+            ))}
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Button
+            disabled={!!busy}
+            onClick={() => asrPackRef.current?.click()}
+          >
+            <FolderUp size={16} />
+            {busy === "asr-import" ? t("جارٍ الاستيراد…", "Importing…") : t("استيراد حزمة نموذج محلية (.zip / ملفات)", "Import local model pack (.zip / files)")}
+          </Button>
+          <input
+            ref={asrPackRef}
+            type="file"
+            multiple
+            accept=".zip,.onnx,.json,application/zip"
+            className="sr-only"
+            aria-label={t("استيراد حزمة نموذج صوتي", "Import local speech model pack")}
+            onChange={async (e) => {
+              const files = Array.from(e.target.files ?? []);
+              if (asrPackRef.current) asrPackRef.current.value = "";
+              if (!files.length) return;
+              setBusy("asr-import");
+              try {
+                const input = files.length === 1 && files[0].name.toLowerCase().endsWith(".zip") ? files[0] : files;
+                const rec = await importLocalModelPack(input);
+                toast(t(`تم استيراد النموذج "${rec.name}" والتحقق منه`, `Imported & verified "${rec.name}"`));
+              } catch (err) {
+                toast(err instanceof Error ? err.message : t("فشل استيراد حزمة النموذج", "Model pack import failed"), "err");
+              } finally {
+                setBusy(null);
+              }
+            }}
+          />
         </div>
       </Section>
 

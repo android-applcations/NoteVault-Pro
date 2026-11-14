@@ -2,13 +2,16 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { ArrowRight, Copy, Download, FilePlus2, FileQuestion, Pencil, RotateCw, ScanText, ZoomIn, ZoomOut } from "lucide-react";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { ensureRecordingForAudioAttachment } from "@/asr/asrClient";
 import { db } from "@/data/db";
 import type { Attachment } from "@/data/types";
 import { formatBytes } from "@/domain/text";
 import type { OcrLang } from "@/files/ocr";
 import { downloadAttachment, getBlob } from "@/services/files";
 import { createNote } from "@/services/notes";
+import { AudioPlayer } from "@/ui/AudioPlayer";
 import { AttachmentEditModal } from "@/ui/Files";
+import { TranscriptPanel } from "@/ui/TranscriptPanel";
 import { useApp } from "@/ui/app-context";
 import { useI18n } from "@/ui/i18n";
 import { Badge, Button, EmptyState, IconButton, Select, Skeleton, Textarea } from "@/ui/kit";
@@ -99,9 +102,45 @@ function TextView({ att }: { att: Attachment }) {
   return <pre dir="auto" className="max-h-[75dvh] overflow-auto whitespace-pre-wrap rounded-2xl border border-line bg-surface p-4 text-sm leading-7">{text ?? "…"}</pre>;
 }
 
-function AudioView({ att }: { att: Attachment }) {
-  const { url } = useBlobUrl(att);
-  return <div className="card-surface p-6">{url ? <audio controls src={url} className="w-full" /> : <Skeleton className="h-12" />}{att.description && <p className="mt-3 text-sm text-muted" dir="auto">{att.description}</p>}</div>;
+function AudioView({ att, initialTimeSec }: { att: Attachment; initialTimeSec?: number }) {
+  const rec = useLiveQuery(
+    async () => (await db.recordings.filter((r) => !r.deletedAt && r.attachmentId === att.id).first()) ?? null,
+    [att.id]
+  );
+  const [seekReq, setSeekReq] = useState<{ ms: number; nonce: number } | null>(() =>
+    initialTimeSec !== undefined && Number.isFinite(initialTimeSec) && initialTimeSec > 0
+      ? { ms: Math.round(initialTimeSec * 1000), nonce: 1 }
+      : null
+  );
+  const [playTimeMs, setPlayTimeMs] = useState(0);
+
+  useEffect(() => {
+    if (rec === undefined) return;
+    if (rec === null) {
+      void ensureRecordingForAudioAttachment(att.id).catch(() => undefined);
+    }
+  }, [rec, att.id]);
+
+  return (
+    <div className="space-y-4">
+      <AudioPlayer
+        blobId={att.blobId}
+        title={att.name}
+        recordingId={rec?.id}
+        knownDurationMs={rec?.durationMs ?? 0}
+        seekRequest={seekReq}
+        onTimeUpdateMs={setPlayTimeMs}
+      />
+      {att.description && <p className="text-sm text-muted" dir="auto">{att.description}</p>}
+      {rec && (
+        <TranscriptPanel
+          recording={rec}
+          currentTimeMs={playTimeMs}
+          onSeekMs={(ms) => setSeekReq({ ms, nonce: Date.now() })}
+        />
+      )}
+    </div>
+  );
 }
 
 function PdfLoader({ att, page, q }: { att: Attachment; page?: number; q?: string }) {
@@ -133,6 +172,7 @@ export default function FileViewer() {
   if (att === undefined) return null;
   if (!att || att.deletedAt) return <EmptyState icon={<FileQuestion />} title={t("الملف غير موجود", "File not found")} action={<Link to="/library"><Button>{t("المكتبة", "Library")}</Button></Link>} />;
   const page = Number(params.get("page")) || undefined;
+  const audioT = params.has("t") ? Number(params.get("t")) : undefined;
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -143,7 +183,7 @@ export default function FileViewer() {
       </div>
       {att.kind === "pdf" && <PdfLoader att={att} page={page} q={params.get("q") ?? undefined} />}
       {att.kind === "image" && <ImageView att={att} />}
-      {att.kind === "audio" && <AudioView att={att} />}
+      {att.kind === "audio" && <AudioView att={att} initialTimeSec={audioT} />}
       {(att.kind === "text" || att.kind === "markdown") && <TextView att={att} />}
       <AttachmentEditModal att={edit} onClose={() => setEdit(null)} />
     </div>

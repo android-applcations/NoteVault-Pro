@@ -338,6 +338,9 @@ const AppSettingSchema = z.discriminatedUnion("key", [
   z.object({ key: z.literal("keepOriginalImages"), value: z.boolean() }),
   z.object({ key: z.literal("recentSearches"), value: z.array(shortStr(200)).max(20) }),
   z.object({ key: z.literal("schemaVersion"), value: z.number().int().min(1).max(100) }),
+  z.object({ key: z.literal("asrDefaultModel"), value: shortStr(120) }),
+  z.object({ key: z.literal("asrDefaultLang"), value: z.enum(["auto", "ar", "en"]) }),
+  z.object({ key: z.literal("recorderPreferredDevice"), value: shortStr(128) }),
 ]);
 
 const TrashItemSchema = z.object({
@@ -355,6 +358,91 @@ const CalEventSchema = z.object({
   type: z.enum(["exam", "other"]),
   subjectId: optId,
   createdAt: defTs,
+  updatedAt: defTs,
+});
+
+const RecordingSchema = z.object({
+  id: idSchema,
+  subjectId: optId,
+  lectureId: idSchema,
+  attachmentId: optId,
+  noteId: optId,
+  title: shortStr(300).min(1),
+  mime: shortStr(128).optional().default("audio/webm"),
+  ext: shortStr(16).optional().default("webm"),
+  status: z.enum(["recording", "paused", "finalizing", "ready", "error"]).optional().default("ready"),
+  durationMs: z.number().finite().min(0).max(86_400_000).optional().default(0),
+  chunkCount: z.number().int().min(0).max(100_000).optional().default(0),
+  totalBytes: z.number().int().min(0).max(1024 * 1024 * 1024).optional().default(0),
+  deviceLabel: shortStr(200).optional(),
+  transcriptionStatus: z.enum(["idle", "queued", "transcribing", "paused", "done", "error"]).optional().default("idle"),
+  transcriptionLang: z.enum(["auto", "ar", "en"]).optional().default("auto"),
+  transcriptionModelId: shortStr(120).optional(),
+  transcriptionProgress: z.number().finite().min(0).max(100).optional().default(0),
+  transcribedMs: z.number().finite().min(0).max(86_400_000).optional(),
+  transcriptionError: shortStr(500).optional(),
+  errorDetail: shortStr(500).optional(),
+  createdAt: defTs,
+  updatedAt: defTs,
+  deletedAt: optTs,
+  trashId: optId,
+});
+
+const RecordingChunkSchema = z.object({
+  id: idSchema,
+  recordingId: idSchema,
+  seq: z.number().int().min(0).max(100_000),
+  blobId: idSchema,
+  mime: shortStr(128).optional().default("audio/webm"),
+  size: z.number().int().min(0).max(200 * 1024 * 1024),
+  durationMs: z.number().finite().min(0).max(3_600_000).optional().default(0),
+  startMs: z.number().finite().min(0).max(86_400_000).optional().default(0),
+  endMs: z.number().finite().min(0).max(86_400_000).optional().default(0),
+  createdAt: defTs,
+});
+
+const RecordingMarkerSchema = z.object({
+  id: idSchema,
+  recordingId: idSchema,
+  timeMs: z.number().finite().min(0).max(86_400_000),
+  label: shortStr(300).optional().default(""),
+  color: hexColorSchema.optional().catch(undefined),
+  noteId: optId,
+  createdAt: defTs,
+  updatedAt: defTs,
+});
+
+const TranscriptSegmentSchema = z.object({
+  id: idSchema,
+  recordingId: idSchema,
+  order: z.number().int().min(0).max(500_000),
+  startMs: z.number().finite().min(0).max(86_400_000),
+  endMs: z.number().finite().min(0).max(86_400_000),
+  text: shortStr(10_000),
+  lang: shortStr(16).optional(),
+  confidence: z.number().finite().min(0).max(1).optional(),
+  editedManually: z.boolean().optional().default(false),
+  createdAt: defTs,
+  updatedAt: defTs,
+});
+
+const AsrModelFileInfoSchema = z.object({
+  url: shortStr(512),
+  size: z.number().int().min(0),
+  sha256: shortStr(128),
+});
+
+const AsrModelSchema = z.object({
+  id: idSchema,
+  name: shortStr(200).min(1),
+  repoId: shortStr(200),
+  languages: z.array(shortStr(16)).max(100).optional().default([]),
+  sizeBytes: z.number().int().min(0),
+  downloadedBytes: z.number().int().min(0).optional().default(0),
+  status: z.enum(["not_installed", "downloading", "verifying", "ready", "error"]),
+  fileHashes: z.record(shortStr(200), AsrModelFileInfoSchema).optional().default({}),
+  verifiedAt: optTs,
+  error: shortStr(500).optional(),
   updatedAt: defTs,
 });
 
@@ -382,4 +470,9 @@ export const TABLE_SCHEMAS: Partial<Record<TableName, z.ZodTypeAny>> = {
   appSettings: AppSettingSchema,
   trashItems: TrashItemSchema,
   events: CalEventSchema,
+  recordings: RecordingSchema,
+  recordingChunks: RecordingChunkSchema,
+  recordingMarkers: RecordingMarkerSchema,
+  transcriptSegments: TranscriptSegmentSchema,
+  asrModels: AsrModelSchema,
 };

@@ -47,7 +47,8 @@ export async function softDelete(kind: TrashKind, id: string): Promise<string> {
   const lectureIds: string[] = [];
   const noteIds: string[] = [];
   const attIds: string[] = [];
-  await db.transaction("rw", [db.subjects, db.lectures, db.notes, db.attachments, db.trashItems], async () => {
+  const recIds: string[] = [];
+  await db.transaction("rw", [db.subjects, db.lectures, db.notes, db.attachments, db.recordings, db.trashItems], async () => {
     const mark = { deletedAt: t, trashId };
     if (kind === "subject") {
       const s = await db.subjects.get(id);
@@ -57,6 +58,7 @@ export async function softDelete(kind: TrashKind, id: string): Promise<string> {
       (await db.lectures.where("subjectId").equals(id).filter((x) => !x.deletedAt).primaryKeys()).forEach((k) => lectureIds.push(k));
       (await db.notes.where("subjectId").equals(id).filter((x) => !x.deletedAt).primaryKeys()).forEach((k) => noteIds.push(k));
       (await db.attachments.where("subjectId").equals(id).filter((x) => !x.deletedAt).primaryKeys()).forEach((k) => attIds.push(k));
+      (await db.recordings.where("subjectId").equals(id).filter((x) => !x.deletedAt).primaryKeys()).forEach((k) => recIds.push(k));
     } else if (kind === "lecture") {
       const l = await db.lectures.get(id);
       if (!l || l.deletedAt) throw new Error("NOT_FOUND");
@@ -64,6 +66,7 @@ export async function softDelete(kind: TrashKind, id: string): Promise<string> {
       lectureIds.push(id);
       (await db.notes.where("lectureId").equals(id).filter((x) => !x.deletedAt).primaryKeys()).forEach((k) => noteIds.push(k));
       (await db.attachments.where("lectureId").equals(id).filter((x) => !x.deletedAt).primaryKeys()).forEach((k) => attIds.push(k));
+      (await db.recordings.where("lectureId").equals(id).filter((x) => !x.deletedAt).primaryKeys()).forEach((k) => recIds.push(k));
     } else if (kind === "note") {
       const n = await db.notes.get(id);
       if (!n || n.deletedAt) throw new Error("NOT_FOUND");
@@ -75,11 +78,13 @@ export async function softDelete(kind: TrashKind, id: string): Promise<string> {
       if (!a || a.deletedAt) throw new Error("NOT_FOUND");
       label = a.name;
       attIds.push(id);
+      (await db.recordings.where("attachmentId").equals(id).filter((x) => !x.deletedAt).primaryKeys()).forEach((k) => recIds.push(k));
     }
     await db.subjects.where("id").anyOf(subjectIds).modify(mark);
     await db.lectures.where("id").anyOf(lectureIds).modify(mark);
     await db.notes.where("id").anyOf(noteIds).modify(mark);
     await db.attachments.where("id").anyOf(attIds).modify(mark);
+    if (recIds.length) await db.recordings.where("id").anyOf(recIds).modify(mark);
     const item: TrashItem = { id: trashId, kind, refId: id, label, deletedAt: t };
     await db.trashItems.add(item);
   });
@@ -100,7 +105,8 @@ export async function restoreTrash(trashId: string) {
   const lec: string[] = [];
   const nts: string[] = [];
   const atts: string[] = [];
-  await db.transaction("rw", [db.subjects, db.lectures, db.notes, db.attachments, db.trashItems], async () => {
+  const recs: string[] = [];
+  await db.transaction("rw", [db.subjects, db.lectures, db.notes, db.attachments, db.recordings, db.trashItems], async () => {
     const q = { trashId };
     if (item.kind === "lecture") {
       const l = await db.lectures.get(item.refId);
@@ -115,10 +121,12 @@ export async function restoreTrash(trashId: string) {
     (await db.lectures.where("trashId").equals(q.trashId).primaryKeys()).forEach((k) => lec.push(k));
     (await db.notes.where("trashId").equals(q.trashId).primaryKeys()).forEach((k) => nts.push(k));
     (await db.attachments.where("trashId").equals(q.trashId).primaryKeys()).forEach((k) => atts.push(k));
+    (await db.recordings.where("trashId").equals(q.trashId).primaryKeys()).forEach((k) => recs.push(k));
     await db.subjects.where("id").anyOf(subj).modify(clear);
     await db.lectures.where("id").anyOf(lec).modify(clear);
     await db.notes.where("id").anyOf(nts).modify(clear);
     await db.attachments.where("id").anyOf(atts).modify(clear);
+    if (recs.length) await db.recordings.where("id").anyOf(recs).modify(clear);
     // Detach restored children from parents that are still in the trash (prevents dangling references)
     const live = async (table: typeof db.lectures | typeof db.subjects | typeof db.notes, id?: string) => {
       if (!id) return true;
@@ -155,10 +163,13 @@ export async function restoreTrash(trashId: string) {
 export async function purgeAttachments(ids: string[]) {
   if (!ids.length) return;
   const atts = (await db.attachments.bulkGet(ids)).filter(Boolean);
-  const blobIds = Array.from(new Set(atts.map((a) => a!.blobId)));
+  const linkedRecs = await db.recordings.where("attachmentId").anyOf(ids).toArray();
+  const recIds = linkedRecs.map((r) => r.id);
+  const chunks = recIds.length ? await db.recordingChunks.where("recordingId").anyOf(recIds).toArray() : [];
+  const blobIds = Array.from(new Set([...atts.map((a) => a!.blobId), ...chunks.map((c) => c.blobId)]));
   await db.transaction(
     "rw",
-    [db.attachments, db.blobs, db.pdfDocuments, db.bookmarks, db.highlights, db.annotations, db.flashcards],
+    [db.attachments, db.blobs, db.pdfDocuments, db.bookmarks, db.highlights, db.annotations, db.flashcards, db.recordings, db.recordingChunks, db.recordingMarkers, db.transcriptSegments],
     async () => {
       await db.attachments.bulkDelete(ids);
       await db.pdfDocuments.bulkDelete(ids);
@@ -166,9 +177,16 @@ export async function purgeAttachments(ids: string[]) {
       await db.highlights.where("attachmentId").anyOf(ids).delete();
       await db.annotations.where("attachmentId").anyOf(ids).delete();
       await db.flashcards.where("deckId").notEqual("").filter((c) => !!c.imageId && ids.includes(c.imageId)).modify({ imageId: undefined });
+      if (recIds.length) {
+        await db.recordings.bulkDelete(recIds);
+        await db.recordingChunks.where("recordingId").anyOf(recIds).delete();
+        await db.recordingMarkers.where("recordingId").anyOf(recIds).delete();
+        await db.transcriptSegments.where("recordingId").anyOf(recIds).delete();
+      }
       for (const b of blobIds) {
-        const still = await db.attachments.where("blobId").equals(b).count();
-        if (still === 0) await db.blobs.delete(b);
+        const stillAtt = await db.attachments.where("blobId").equals(b).count();
+        const stillChunk = await db.recordingChunks.where("blobId").equals(b).count();
+        if (stillAtt === 0 && stillChunk === 0) await db.blobs.delete(b);
       }
     }
   );
@@ -177,21 +195,34 @@ export async function purgeAttachments(ids: string[]) {
 
 export async function purgeTrash(trashId: string) {
   const item = await db.trashItems.get(trashId);
-  const [subj, lec, nts, atts] = await Promise.all([
+  const [subj, lec, nts, atts, recs] = await Promise.all([
     db.subjects.where("trashId").equals(trashId).primaryKeys(),
     db.lectures.where("trashId").equals(trashId).primaryKeys(),
     db.notes.where("trashId").equals(trashId).primaryKeys(),
     db.attachments.where("trashId").equals(trashId).primaryKeys(),
+    db.recordings.where("trashId").equals(trashId).primaryKeys(),
   ]);
   await purgeAttachments(atts);
+  const extraChunks = recs.length ? await db.recordingChunks.where("recordingId").anyOf(recs).toArray() : [];
   await db.transaction(
     "rw",
-    [db.subjects, db.lectures, db.notes, db.noteVersions, db.noteTags, db.trashItems, db.flashcardDecks, db.quizzes, db.references, db.events, db.flashcards],
+    [db.subjects, db.lectures, db.notes, db.noteVersions, db.noteTags, db.trashItems, db.flashcardDecks, db.quizzes, db.references, db.events, db.flashcards, db.recordings, db.recordingChunks, db.recordingMarkers, db.transcriptSegments, db.blobs, db.attachments],
     async () => {
       await db.noteVersions.where("noteId").anyOf(nts).delete();
       await db.noteTags.where("noteId").anyOf(nts).delete();
       await db.notes.bulkDelete(nts);
       await db.lectures.bulkDelete(lec);
+      if (recs.length) {
+        await db.recordings.bulkDelete(recs);
+        await db.recordingChunks.where("recordingId").anyOf(recs).delete();
+        await db.recordingMarkers.where("recordingId").anyOf(recs).delete();
+        await db.transcriptSegments.where("recordingId").anyOf(recs).delete();
+        for (const c of extraChunks) {
+          const stillAtt = await db.attachments.where("blobId").equals(c.blobId).count();
+          const stillChunk = await db.recordingChunks.where("blobId").equals(c.blobId).count();
+          if (stillAtt === 0 && stillChunk === 0) await db.blobs.delete(c.blobId);
+        }
+      }
       if (subj.length) {
         await db.flashcardDecks.where("subjectId").anyOf(subj).modify({ subjectId: undefined });
         await db.flashcards.where("subjectId").anyOf(subj).modify({ subjectId: undefined });

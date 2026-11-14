@@ -1,13 +1,15 @@
 // Presentation layer – application shell: sidebar, mobile navigation, top bar, global shortcuts.
 import { motion } from "motion/react";
 import {
-  BookOpen, CalendarDays, ChevronsLeft, ChevronsRight, FolderOpen, GraduationCap, Home, Languages, Layers, MoreHorizontal, Moon,
-  NotebookText, Plus, Search, Settings, Sun, Trash2, Zap, ClipboardCheck, Bookmark, type LucideIcon,
+  BookOpen, CalendarDays, ChevronsLeft, ChevronsRight, FolderOpen, GraduationCap, Home, Languages, Layers, Mic, MoreHorizontal, Moon,
+  NotebookText, Pause, Play, Plus, Search, Settings, Square, Sun, Trash2, Zap, ClipboardCheck, Bookmark, type LucideIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { formatDuration } from "@/domain/text";
 import { registerServiceWorker } from "@/pwa";
 import { createNote } from "@/services/notes";
+import { lectureRecorder } from "@/services/recorder";
 import { cn } from "@/utils/cn";
 import { useApp } from "./app-context";
 import { CardEditor } from "./CardEditor";
@@ -46,7 +48,7 @@ export function Logo({ size = 36 }: { size?: number }) {
 
 export function Shell({ children }: { children: ReactNode }) {
   const { t, setPrefs, lang } = useI18n();
-  const { toast, setQuickOpen, cardPrefill, closeCard } = useApp();
+  const { toast, setQuickOpen, cardPrefill, closeCard, recorder, stopAndSaveRecording } = useApp();
   const nav = useNavigate();
   const loc = useLocation();
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem("nv-sidebar") === "1");
@@ -144,6 +146,60 @@ export function Shell({ children }: { children: ReactNode }) {
       <button onClick={() => void newNote()} aria-label={t("ملاحظة جديدة", "New note")} className="fixed bottom-6 end-6 z-30 hidden h-14 items-center gap-2 rounded-2xl bg-gradient-to-br from-primary to-accent px-5 font-bold text-white shadow-xl shadow-primary/30 transition hover:scale-105 active:scale-95 lg:flex">
         <Plus size={20} />{t("ملاحظة جديدة", "New note")}
       </button>
+
+      {(recorder.phase === "recording" || recorder.phase === "paused" || recorder.phase === "saving") && (
+        <div
+          role="region"
+          aria-label={t("مسجل المحاضرة النشط", "Active lecture recorder")}
+          className="fixed bottom-24 start-4 z-40 flex items-center gap-2 rounded-2xl border border-danger/35 bg-surface/95 px-3 py-2 shadow-xl backdrop-blur-md lg:bottom-6 lg:start-auto lg:end-56"
+        >
+          <span
+            className={cn(
+              "inline-block h-2.5 w-2.5 rounded-full",
+              recorder.phase === "recording" ? "animate-pulse bg-danger" : "bg-warning"
+            )}
+          />
+          <button
+            type="button"
+            onClick={() => recorder.lectureId && nav(`/lectures/${recorder.lectureId}`)}
+            className="flex items-center gap-1.5 text-xs font-extrabold hover:text-primary"
+            title={t("العودة إلى المحاضرة", "Go to lecture")}
+          >
+            <Mic size={14} className="text-danger" />
+            <span className="max-w-[110px] truncate">{recorder.title || t("تسجيل محاضرة", "Recording")}</span>
+            <span className="font-mono tabular-nums text-danger">{formatDuration(recorder.elapsedMs)}</span>
+          </button>
+          {recorder.phase === "recording" ? (
+            <button
+              type="button"
+              onClick={() => lectureRecorder.pause()}
+              aria-label={t("إيقاف مؤقت", "Pause")}
+              className="rounded-lg bg-surface2 p-1.5 text-fg hover:bg-line"
+            >
+              <Pause size={14} />
+            </button>
+          ) : recorder.phase === "paused" ? (
+            <button
+              type="button"
+              onClick={() => lectureRecorder.resume()}
+              aria-label={t("استئناف", "Resume")}
+              className="rounded-lg bg-surface2 p-1.5 text-accent hover:bg-line"
+            >
+              <Play size={14} />
+            </button>
+          ) : null}
+          <button
+            type="button"
+            disabled={recorder.phase === "saving"}
+            onClick={() => void stopAndSaveRecording()}
+            aria-label={t("إيقاف وحفظ", "Stop & save")}
+            className="rounded-lg bg-danger px-2.5 py-1 text-xs font-bold text-white hover:opacity-90 disabled:opacity-50"
+          >
+            <Square size={12} className="inline me-1" />
+            {recorder.phase === "saving" ? t("حفظ…", "Saving…") : t("حفظ", "Save")}
+          </button>
+        </div>
+      )}
 
       <QuickCapture />
       <CardEditor open={!!cardPrefill} onClose={closeCard} prefill={cardPrefill ?? undefined} />

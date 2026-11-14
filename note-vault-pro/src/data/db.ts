@@ -2,7 +2,7 @@
 import Dexie, { type Table } from "dexie";
 import type * as T from "./types";
 
-export const DATA_VERSION = 2;
+export const DATA_VERSION = 3;
 
 export class VaultDB extends Dexie {
   semesters!: Table<T.Semester, string>;
@@ -30,6 +30,11 @@ export class VaultDB extends Dexie {
   appSettings!: Table<T.Setting, string>;
   trashItems!: Table<T.TrashItem, string>;
   events!: Table<T.CalEvent, string>;
+  recordings!: Table<T.LectureRecording, string>;
+  recordingChunks!: Table<T.RecordingChunk, string>;
+  recordingMarkers!: Table<T.RecordingMarker, string>;
+  transcriptSegments!: Table<T.TranscriptSegment, string>;
+  asrModels!: Table<T.AsrModelRecord, string>;
 
   constructor(name = "notevault-pro") {
     super(name);
@@ -99,6 +104,43 @@ export class VaultDB extends Dexie {
           });
         await tx.table("appSettings").put({ key: "schemaVersion", value: 2 });
       });
+
+    this.version(3)
+      .stores({
+        semesters: "id, archived, startDate, updatedAt",
+        subjects: "id, semesterId, archived, deletedAt, trashId, updatedAt",
+        lectures: "id, subjectId, week, date, archived, deletedAt, trashId, updatedAt",
+        notes: "id, subjectId, lectureId, kind, pinned, favorite, archived, deletedAt, trashId, updatedAt",
+        noteVersions: "id, noteId, createdAt",
+        attachments: "id, subjectId, lectureId, noteId, blobId, hash, kind, category, size, deletedAt, trashId, createdAt",
+        blobs: "id",
+        pdfDocuments: "id, indexStatus",
+        bookmarks: "id, attachmentId",
+        highlights: "id, attachmentId",
+        annotations: "id, attachmentId",
+        flashcardDecks: "id, subjectId",
+        flashcards: "id, deckId, subjectId, due, state, imageId",
+        reviewLogs: "id, cardId, reviewedAt",
+        quizzes: "id, subjectId, semesterId",
+        quizQuestions: "id, quizId",
+        quizAttempts: "id, quizId, finishedAt",
+        references: "id, subjectId, type",
+        tags: "id, &name",
+        noteTags: "id, noteId, tagId, [noteId+tagId]",
+        searchIndex: "id, kind, refId, subjectId",
+        activities: "id, createdAt",
+        appSettings: "key",
+        trashItems: "id, kind, deletedAt",
+        events: "id, date, subjectId",
+        recordings: "id, lectureId, subjectId, attachmentId, status, transcriptionStatus, deletedAt, trashId, createdAt, updatedAt",
+        recordingChunks: "id, recordingId, seq, blobId, [recordingId+seq]",
+        recordingMarkers: "id, recordingId, timeMs",
+        transcriptSegments: "id, recordingId, order, startMs",
+        asrModels: "id, status, updatedAt",
+      })
+      .upgrade(async (tx) => {
+        await tx.table("appSettings").put({ key: "schemaVersion", value: 3 });
+      });
   }
 }
 
@@ -110,5 +152,6 @@ export const TABLE_NAMES = [
   "bookmarks", "highlights", "annotations", "flashcardDecks", "flashcards", "reviewLogs", "quizzes",
   "quizQuestions", "quizAttempts", "references", "tags", "noteTags", "searchIndex", "activities",
   "appSettings", "trashItems", "events",
+  "recordings", "recordingChunks", "recordingMarkers", "transcriptSegments", "asrModels",
 ] as const;
 export type TableName = (typeof TABLE_NAMES)[number];

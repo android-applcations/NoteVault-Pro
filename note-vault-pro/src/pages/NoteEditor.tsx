@@ -1,12 +1,13 @@
 import type { Editor, JSONContent } from "@tiptap/core";
 import { useLiveQuery } from "dexie-react-hooks";
 import { AnimatePresence, motion } from "motion/react";
-import { AlertTriangle, ArrowRight, Archive, Check, CloudUpload, Copy, Download, History, Info, Loader2, Paperclip, Pin, RotateCcw, Star, Trash2, Zap } from "lucide-react";
+import { AlertTriangle, ArrowRight, Archive, Check, Clock, CloudUpload, Copy, Download, History, Info, Loader2, Paperclip, Pin, RotateCcw, Star, Trash2, Zap } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { db } from "@/data/db";
 import type { Note, NoteVersion } from "@/data/types";
 import { sanitizeDoc } from "@/domain/sanitize";
+import { formatDuration } from "@/domain/text";
 import { softDelete } from "@/services/core";
 import { getNoteTagNames, setNoteTags } from "@/services/library";
 import { AutoSaver, deleteVersion, duplicateNote, getVersions, restoreVersion, saveNoteContent, updateNoteMeta, type SaveStatus } from "@/services/notes";
@@ -40,7 +41,7 @@ function SaveBadge({ status, onRetry }: { status: SaveStatus; onRetry: () => voi
 
 function NoteView({ note }: { note: Note }) {
   const { t, lang, fmtDate } = useI18n();
-  const { toast, confirm, openCard } = useApp();
+  const { toast, confirm, openCard, recorder } = useApp();
   const nav = useNavigate();
   const [params] = useSearchParams();
   const subjects = useSubjects();
@@ -67,17 +68,51 @@ function NoteView({ note }: { note: Note }) {
     const flush = () => { void s.flush(); };
     const onVis = () => document.visibilityState === "hidden" && flush();
     const onBefore = (e: BeforeUnloadEvent) => { if (s.hasPending()) { flush(); e.preventDefault(); } };
+    const onExternal = async (ev: Event) => {
+      const detail = (ev as CustomEvent<{ noteId?: string }>).detail;
+      if (detail?.noteId !== note.id) return;
+      const fresh = await db.notes.get(note.id);
+      if (!fresh || fresh.deletedAt) return;
+      const safe = sanitizeDoc(fresh.content);
+      contentRef.current = safe;
+      titleRef.current = fresh.title;
+      setTitle(fresh.title);
+      editorRef.current?.commands.setContent(safe, { emitUpdate: false });
+      setStatus("saved");
+    };
+    const onJumpAudio = async (ev: Event) => {
+      const detail = (ev as CustomEvent<{ recordingId?: string; attachmentId?: string; timeMs?: number }>).detail;
+      if (!detail) return;
+      const tSec = Math.max(0, Math.floor((detail.timeMs ?? 0) / 1000));
+      if (detail.attachmentId) {
+        await s.flush();
+        nav(`/files/${detail.attachmentId}?t=${tSec}`);
+        return;
+      }
+      if (!detail.recordingId) return;
+      const rec = await db.recordings.get(detail.recordingId);
+      if (rec && !rec.deletedAt && rec.attachmentId) {
+        await s.flush();
+        nav(`/files/${rec.attachmentId}?t=${tSec}`);
+      } else {
+        toast(t("التسجيل الصوتي ما زال قيد التجهيز أو غير متوفر", "Audio recording is not finalized yet"), "info");
+      }
+    };
     document.addEventListener("visibilitychange", onVis);
     window.addEventListener("pagehide", flush);
     window.addEventListener("beforeunload", onBefore);
+    window.addEventListener("nv-note-external-update", onExternal);
+    window.addEventListener("nv-jump-audio", onJumpAudio);
     getNoteTagNames(note.id).then((n) => setTags(n.join(", ")));
     return () => {
       document.removeEventListener("visibilitychange", onVis);
       window.removeEventListener("pagehide", flush);
       window.removeEventListener("beforeunload", onBefore);
+      window.removeEventListener("nv-note-external-update", onExternal);
+      window.removeEventListener("nv-jump-audio", onJumpAudio);
       void s.dispose();
     };
-  }, [note.id]);
+  }, [note.id, nav, toast, t]);
 
   const schedule = useCallback(() => {
     saverRef.current?.schedule(() => ({ title: titleRef.current, content: contentRef.current ?? editorRef.current?.getJSON() ?? { type: "doc", content: [{ type: "paragraph" }] } }));
@@ -112,12 +147,34 @@ function NoteView({ note }: { note: Note }) {
     nav(-1);
   };
 
+  const insertLiveTimestamp = () => {
+    const ed = editorRef.current;
+    if (!ed || !recorder.recordingId) return;
+    const ms = Math.max(0, Math.round(recorder.elapsedMs));
+    ed.chain()
+      .focus()
+      .insertContent([
+        {
+          type: "audioTimestamp",
+          attrs: { recordingId: recorder.recordingId, timeMs: ms, label: "" },
+        },
+        { type: "text", text: " " },
+      ])
+      .run();
+  };
+
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <IconButton label={t("رجوع", "Back")} onClick={() => nav(-1)}><ArrowRight size={18} className="ltr:rotate-180" /></IconButton>
         <SaveBadge status={status} onRetry={() => void saverRef.current?.flush()} />
         {live.kind === "quick" && <Badge color="#0b8579"><Zap size={11} />{t("سريعة", "Quick")}</Badge>}
+        {recorder.recordingId && (recorder.phase === "recording" || recorder.phase === "paused") && (
+          <Button className="h-8 bg-danger/10 px-2.5 text-xs text-danger hover:bg-danger/20" onClick={insertLiveTimestamp}>
+            <Clock size={13} />
+            {t("إدراج طابع زمني", "Insert timestamp")} ({formatDuration(recorder.elapsedMs)})
+          </Button>
+        )}
         <div className="ms-auto flex items-center gap-1">
           <IconButton label={live.pinned ? t("إلغاء التثبيت", "Unpin") : t("تثبيت", "Pin")} aria-pressed={live.pinned} onClick={() => void updateNoteMeta(note.id, { pinned: !live.pinned })} className={live.pinned ? "text-accent" : ""}><Pin size={18} /></IconButton>
           <IconButton label={live.favorite ? t("إزالة من المفضلة", "Remove favourite") : t("مفضلة", "Favourite")} aria-pressed={live.favorite} onClick={() => void updateNoteMeta(note.id, { favorite: !live.favorite })} className={live.favorite ? "text-warn" : ""}><Star size={18} fill={live.favorite ? "currentColor" : "none"} /></IconButton>

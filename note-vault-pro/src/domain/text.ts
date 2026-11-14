@@ -102,6 +102,33 @@ export function makeSnippet(text: string, terms: string[], radius = 70): { parts
   return { parts, index: ranges.length ? first : -1 };
 }
 
+export function formatDuration(ms: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) return "00:00";
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  const mm = String(m).padStart(2, "0");
+  const ss = String(s).padStart(2, "0");
+  return h > 0 ? `${String(h).padStart(2, "0")}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+export function parseDuration(str: string): number | null {
+  const s = str.trim();
+  const parts = s.split(":").map((x) => x.trim());
+  if (parts.length < 2 || parts.length > 3) return null;
+  const nums = parts.map((x) => Number(x));
+  if (nums.some((n) => !Number.isFinite(n) || n < 0)) return null;
+  if (parts.length === 2) {
+    const [m, sec] = nums;
+    if (sec >= 60) return null;
+    return Math.round((m * 60 + sec) * 1000);
+  }
+  const [h, m, sec] = nums;
+  if (m >= 60 || sec >= 60) return null;
+  return Math.round((h * 3600 + m * 60 + sec) * 1000);
+}
+
 /** Extracts plain text from a Tiptap JSON document. */
 export function plainFromDoc(doc: JSONContent | null | undefined): string {
   if (!doc) return "";
@@ -109,6 +136,11 @@ export function plainFromDoc(doc: JSONContent | null | undefined): string {
   const BLOCKS = new Set(["paragraph", "heading", "listItem", "taskItem", "blockquote", "codeBlock", "tableRow", "callout"]);
   const walk = (n: JSONContent) => {
     if (n.type === "text" && n.text) out.push(n.text);
+    else if (n.type === "audioTimestamp") {
+      const ms = Number(n.attrs?.timeMs) || 0;
+      const lbl = typeof n.attrs?.label === "string" && n.attrs.label ? ` ${n.attrs.label}` : "";
+      out.push(` [${formatDuration(ms)}${lbl}] `);
+    }
     else if (n.type === "hardBreak") out.push("\n");
     if (n.content) {
       for (const c of n.content) walk(c);

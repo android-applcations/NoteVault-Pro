@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 import Dexie from "dexie";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { db, VaultDB } from "@/data/db";
+import { DATA_VERSION, db, VaultDB } from "@/data/db";
 import { addFile } from "@/services/files";
 import { createNote } from "@/services/notes";
 import { auditDatabaseIntegrity, checkStorageQuota, cleanupOrphans } from "@/services/storage";
@@ -63,7 +63,9 @@ describe("Database v2 migration, quota guards & orphan cleanup", () => {
     const migrated = await v2.pdfDocuments.get("att-1");
     expect(migrated?.indexStatus).toBe("done");
     expect(migrated?.indexedPages).toBe(12);
-    expect((await v2.appSettings.get("schemaVersion"))?.value).toBe(2);
+    expect((await v2.appSettings.get("schemaVersion"))?.value).toBe(DATA_VERSION);
+    expect(await v2.recordings.count()).toBe(0);
+    expect(await v2.asrModels.count()).toBe(0);
     v2.close();
     await Dexie.delete(dbName);
   });
