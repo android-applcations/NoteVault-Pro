@@ -4,6 +4,7 @@ import { db, DATA_VERSION, TABLE_NAMES, type TableName } from "@/data/db";
 import { isUuid, safeCssColor, safeDataImageUrl, safeHexColor, safeUrl, sanitizeDoc } from "@/domain/sanitize";
 import { plainFromDoc, sanitizeFileName, wordCount } from "@/domain/text";
 import { sha256, validateFile } from "@/files/validate";
+import { sniffAudio } from "@/files/fileCore";
 import { BackupManifestSchema, ID_RE, TABLE_SCHEMAS } from "./backupSchemas";
 import { logActivity } from "./core";
 import { rebuildIndex } from "./search";
@@ -411,6 +412,14 @@ const RELATIONS: [TableName, string, TableName, boolean][] = [
   ["noteTags", "noteId", "notes", true],
   ["noteTags", "tagId", "tags", true],
   ["events", "subjectId", "subjects", false],
+  ["recordings", "lectureId", "lectures", true],
+  ["recordings", "subjectId", "subjects", false],
+  ["recordings", "attachmentId", "attachments", false],
+  ["recordings", "noteId", "notes", false],
+  ["recordingChunks", "recordingId", "recordings", true],
+  ["recordingMarkers", "recordingId", "recordings", true],
+  ["recordingMarkers", "noteId", "notes", false],
+  ["transcriptSegments", "recordingId", "recordings", true],
 ];
 
 function validateParsed(p: ParsedBackup, existing?: Partial<Record<TableName, Set<string>>>) {
@@ -452,6 +461,12 @@ function validateParsed(p: ParsedBackup, existing?: Partial<Record<TableName, Se
     const bid = a.blobId as string;
     if (!ID_RE.test(bid)) throw new BackupError("relation", "attachments.blobId");
     if (!p.blobs.has(bid) && !existing?.blobs?.has(bid)) throw new BackupError("relation", "attachments.blobId → blobs");
+  }
+
+  for (const ch of p.tables.recordingChunks ?? []) {
+    const bid = ch.blobId as string;
+    if (!ID_RE.test(bid)) throw new BackupError("relation", "recordingChunks.blobId");
+    if (!p.blobs.has(bid) && !existing?.blobs?.has(bid)) throw new BackupError("relation", "recordingChunks.blobId → blobs");
   }
 }
 
@@ -504,6 +519,15 @@ async function sanitizeRows(p: ParsedBackup): Promise<Map<string, Blob>> {
     if (cleanThumb) a.thumb = cleanThumb;
     else delete a.thumb;
   }
+  for (const m of p.tables.recordingMarkers ?? []) {
+    if (m.color) m.color = safeHexColor(m.color, "#0f9b8e");
+  }
+  for (const model of p.tables.asrModels ?? []) {
+    // Offline model weights live in CacheStorage and are never stored inside ZIP backups.
+    model.status = "not_installed";
+    model.downloadedBytes = 0;
+    delete model.verifiedAt;
+  }
 
   // Verify every referenced blob outside the Dexie transaction (magic bytes, anti-bomb structure, SHA-256 hash)
   const blobs = new Map<string, Blob>();
@@ -511,19 +535,36 @@ async function sanitizeRows(p: ParsedBackup): Promise<Map<string, Blob>> {
   for (const a of p.tables.attachments ?? []) {
     if (!firstAtt.has(a.blobId as string)) firstAtt.set(a.blobId as string, a);
   }
+  const chunkRef = new Map<string, Row>();
+  for (const ch of p.tables.recordingChunks ?? []) {
+    if (!chunkRef.has(ch.blobId as string)) chunkRef.set(ch.blobId as string, ch);
+  }
   for (const [id, rawBlob] of p.blobs) {
     const att = firstAtt.get(id);
-    if (!att) continue; // unreferenced blob: dropped
-    const blobObj = rawBlob instanceof Blob ? rawBlob : new Blob([rawBlob as BlobPart]);
-    const file = new File([blobObj], String(att.name));
-    const v = await validateFile(file, Number.MAX_SAFE_INTEGER);
-    if (!v.ok || v.kind !== att.kind) throw new BackupError("bad_blob", String(att.name));
-    const h = String(att.hash ?? "");
-    if (h && !h.startsWith("size-")) {
-      const actual = await sha256(file);
-      if (actual !== h) throw new BackupError("corrupt", String(att.name));
+    if (att) {
+      const blobObj = rawBlob instanceof Blob ? rawBlob : new Blob([rawBlob as BlobPart]);
+      const file = new File([blobObj], String(att.name));
+      const v = await validateFile(file, Number.MAX_SAFE_INTEGER);
+      if (!v.ok || v.kind !== att.kind) throw new BackupError("bad_blob", String(att.name));
+      const h = String(att.hash ?? "");
+      if (h && !h.startsWith("size-")) {
+        const actual = await sha256(file);
+        if (actual !== h) throw new BackupError("corrupt", String(att.name));
+      }
+      blobs.set(id, new Blob([blobObj], { type: v.mime }));
+      continue;
     }
-    blobs.set(id, new Blob([blobObj], { type: v.mime }));
+    const ch = chunkRef.get(id);
+    if (ch) {
+      const blobObj = rawBlob instanceof Blob ? rawBlob : new Blob([rawBlob as BlobPart]);
+      if (blobObj.size === 0) throw new BackupError("bad_blob", `chunk-${String(ch.id)}`);
+      const mime = String(ch.mime || "audio/webm").split(";")[0].trim().toLowerCase();
+      if (Number(ch.seq) === 0 && blobObj.size >= 12) {
+        const head = new Uint8Array(await blobObj.slice(0, Math.min(256, blobObj.size)).arrayBuffer());
+        if (!sniffAudio(head, mime)) throw new BackupError("bad_blob", `chunk-${String(ch.id)}`);
+      }
+      blobs.set(id, new Blob([blobObj], { type: mime }));
+    }
   }
   return blobs;
 }

@@ -11,9 +11,17 @@ export default defineConfig({
     launchOptions: executablePath
       ? {
           executablePath,
-          args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+          args: [
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--disable-dev-shm-usage",
+            "--use-fake-device-for-media-stream",
+            "--use-fake-ui-for-media-stream",
+          ],
         }
-      : undefined,
+      : {
+          args: ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"],
+        },
   },
   webServer: {
     command: "npm run build && npm run preview -- --port 4173",

@@ -12,6 +12,7 @@ import { FontSize, TextStyle } from "@tiptap/extension-text-style";
 import StarterKit from "@tiptap/starter-kit";
 import { db } from "@/data/db";
 import { isUuid, safeCssColor, safeCssSize } from "@/domain/sanitize";
+import { formatDuration } from "@/domain/text";
 
 /** Side note / callout block. */
 export const Callout = Node.create({
@@ -145,6 +146,88 @@ const SafeHighlight = Highlight.extend({
   },
 });
 
+/** Clickable audio timestamp pill linked to a lecture recording. */
+export const AudioTimestamp = Node.create({
+  name: "audioTimestamp",
+  group: "inline",
+  inline: true,
+  atom: true,
+  selectable: true,
+  addAttributes() {
+    return {
+      recordingId: {
+        default: null,
+        parseHTML: (el) => {
+          const v = el.getAttribute("data-recording-id");
+          return isUuid(v) ? v : null;
+        },
+        renderHTML: (a) => (isUuid(a.recordingId) ? { "data-recording-id": a.recordingId } : {}),
+      },
+      attachmentId: {
+        default: null,
+        parseHTML: (el) => {
+          const v = el.getAttribute("data-attachment-id");
+          return isUuid(v) ? v : null;
+        },
+        renderHTML: (a) => (isUuid(a.attachmentId) ? { "data-attachment-id": a.attachmentId } : {}),
+      },
+      timeMs: {
+        default: 0,
+        parseHTML: (el) => {
+          const n = Number(el.getAttribute("data-time-ms"));
+          return Number.isFinite(n) && n >= 0 ? Math.round(n) : 0;
+        },
+        renderHTML: (a) => ({ "data-time-ms": String(Math.max(0, Math.round(Number(a.timeMs) || 0))) }),
+      },
+      label: {
+        default: "",
+        parseHTML: (el) => (el.getAttribute("data-label") ?? "").slice(0, 120),
+        renderHTML: (a) => (a.label ? { "data-label": String(a.label).slice(0, 120) } : {}),
+      },
+    };
+  },
+  parseHTML: () => [{ tag: "button[data-audio-ts]" }, { tag: "span[data-audio-ts]" }],
+  renderHTML: ({ HTMLAttributes, node }) => [
+    "button",
+    mergeAttributes(HTMLAttributes, {
+      type: "button",
+      "data-audio-ts": "",
+      dir: "ltr",
+      class: "inline-flex items-center gap-1 rounded-lg bg-accent/15 px-2 py-0.5 text-xs font-extrabold text-accent hover:bg-accent/25 mx-0.5 align-baseline",
+    }),
+    `⏱ ${formatDuration(Number(node.attrs.timeMs) || 0)}`,
+  ],
+  addNodeView() {
+    return ({ node }) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.setAttribute("data-audio-ts", "");
+      if (isUuid(node.attrs.recordingId)) btn.setAttribute("data-recording-id", node.attrs.recordingId);
+      if (isUuid(node.attrs.attachmentId)) btn.setAttribute("data-attachment-id", node.attrs.attachmentId);
+      const timeMs = Math.max(0, Math.round(Number(node.attrs.timeMs) || 0));
+      btn.setAttribute("data-time-ms", String(timeMs));
+      btn.dir = "ltr";
+      btn.className = "inline-flex items-center gap-1 rounded-lg bg-accent/15 px-2 py-0.5 text-xs font-extrabold text-accent hover:bg-accent/25 cursor-pointer mx-0.5 align-baseline select-none";
+      const label = typeof node.attrs.label === "string" && node.attrs.label ? ` · ${node.attrs.label}` : "";
+      btn.textContent = `⏱ ${formatDuration(timeMs)}${label}`;
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        window.dispatchEvent(
+          new CustomEvent("nv-jump-audio", {
+            detail: {
+              recordingId: isUuid(node.attrs.recordingId) ? node.attrs.recordingId : undefined,
+              attachmentId: isUuid(node.attrs.attachmentId) ? node.attrs.attachmentId : undefined,
+              timeMs,
+            },
+          })
+        );
+      });
+      return { dom: btn };
+    };
+  },
+});
+
 export function buildExtensions(placeholder: string) {
   return [
     StarterKit.configure({
@@ -171,5 +254,6 @@ export function buildExtensions(placeholder: string) {
     Callout,
     Formula,
     AttachmentImage,
+    AudioTimestamp,
   ];
 }

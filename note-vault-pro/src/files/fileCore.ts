@@ -168,8 +168,9 @@ export function inspectWebp(b: Uint8Array, totalSize: number): { ok: true; width
   return checkDims(width, height, totalSize, "image/webp");
 }
 
-function sniffAudio(b: Uint8Array, mime: string): boolean {
+export function sniffAudio(b: Uint8Array, rawMime: string): boolean {
   if (b.length < 12) return false;
+  const mime = rawMime.split(";")[0].trim().toLowerCase();
   if (mime === "audio/mpeg") {
     if (ascii(b, 0, "ID3")) return true;
     // MPEG audio frame sync: 11 set bits + valid version (!= 01) + layer (!= 00)
@@ -198,7 +199,7 @@ function sniffAudio(b: Uint8Array, mime: string): boolean {
   }
   if (mime === "audio/webm") {
     if (b[0] !== 0x1a || b[1] !== 0x45 || b[2] !== 0xdf || b[3] !== 0xa3) return false;
-    const s = Array.from(b.subarray(0, Math.min(64, b.length)), (c) => String.fromCharCode(c)).join("");
+    const s = Array.from(b.subarray(0, Math.min(256, b.length)), (c) => String.fromCharCode(c)).join("");
     return s.includes("webm") || s.includes("matroska");
   }
   return false;
@@ -241,7 +242,7 @@ export async function validateBlobStructure(
       return { ok: true, width: res.width, height: res.height };
     }
     case "audio": {
-      const head = new Uint8Array(await blob.slice(0, Math.min(64, blob.size)).arrayBuffer());
+      const head = new Uint8Array(await blob.slice(0, Math.min(256, blob.size)).arrayBuffer());
       if (!sniffAudio(head, mime)) return { ok: false, reason: "mismatch" };
       return { ok: true };
     }

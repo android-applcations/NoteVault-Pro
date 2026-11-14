@@ -1,7 +1,7 @@
 // Presentation layer – small design-system kit.
 import { AnimatePresence, motion } from "motion/react";
 import { X } from "lucide-react";
-import { useEffect, useId, useRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import { forwardRef, useEffect, useId, useRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 import { cn } from "@/utils/cn";
 import { useI18n } from "./i18n";
 
@@ -32,9 +32,9 @@ export function IconButton({ label, className, children, ...p }: ButtonHTMLAttri
 }
 
 const fieldCls = "w-full rounded-xl border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-muted/70 focus:border-accent min-h-10";
-export function Input(p: InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...p} className={cn(fieldCls, p.className)} />;
-}
+export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(function Input(p, ref) {
+  return <input ref={ref} {...p} className={cn(fieldCls, p.className)} />;
+});
 export function Textarea(p: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return <textarea {...p} className={cn(fieldCls, "min-h-20", p.className)} />;
 }
@@ -95,14 +95,17 @@ export function PageHeader({ title, subtitle, actions, back }: { title: ReactNod
 export function Modal({ open, onClose, title, children, footer, wide }: { open: boolean; onClose: () => void; title: string; children: ReactNode; footer?: ReactNode; wide?: boolean }) {
   const { t } = useI18n();
   const ref = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   const titleId = useId();
   useEffect(() => {
     if (!open) return;
     const prev = document.activeElement as HTMLElement | null;
+    const prevOverflow = document.body.style.overflow;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.stopPropagation();
-        onClose();
+        onCloseRef.current();
       }
       if (e.key === "Tab" && ref.current) {
         const f = ref.current.querySelectorAll<HTMLElement>('a[href],button:not([disabled]),input:not([disabled]),select,textarea,[tabindex]:not([tabindex="-1"])');
@@ -113,19 +116,23 @@ export function Modal({ open, onClose, title, children, footer, wide }: { open: 
       }
     };
     document.addEventListener("keydown", onKey);
-    const t0 = setTimeout(() => ref.current?.querySelector<HTMLElement>("input,textarea,select,button[data-autofocus]")?.focus(), 60);
+    const t0 = setTimeout(() => {
+      if (!ref.current) return;
+      if (ref.current.contains(document.activeElement)) return;
+      ref.current.querySelector<HTMLElement>("input,textarea,select,button[data-autofocus]")?.focus();
+    }, 60);
     document.body.style.overflow = "hidden";
     return () => {
       document.removeEventListener("keydown", onKey);
       clearTimeout(t0);
-      document.body.style.overflow = "";
+      document.body.style.overflow = prevOverflow;
       prev?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
   return (
     <AnimatePresence>
       {open && (
-        <motion.div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+        <motion.div key="nv-modal-backdrop" className="fixed inset-0 z-[80] flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(e) => e.target === e.currentTarget && onCloseRef.current()}>
           <motion.div
             ref={ref} role="dialog" aria-modal="true" aria-labelledby={titleId}
             className={cn("flex max-h-[92dvh] w-full flex-col rounded-t-3xl bg-surface shadow-2xl sm:rounded-3xl", wide ? "sm:max-w-3xl" : "sm:max-w-lg")}
@@ -133,7 +140,7 @@ export function Modal({ open, onClose, title, children, footer, wide }: { open: 
           >
             <div className="flex items-center justify-between gap-2 border-b border-line px-5 py-3.5">
               <h2 id={titleId} className="text-lg font-extrabold">{title}</h2>
-              <IconButton label={t("إغلاق", "Close")} onClick={onClose}><X size={18} /></IconButton>
+              <IconButton label={t("إغلاق", "Close")} onClick={() => onCloseRef.current()}><X size={18} /></IconButton>
             </div>
             <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
             {footer && <div className="flex flex-wrap justify-end gap-2 border-t border-line px-5 py-3 safe-bottom">{footer}</div>}

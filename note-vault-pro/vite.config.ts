@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
+import { ensureAsrAssets } from "./scripts/copy-asr-assets.mjs";
 import { ensureOcrAssets } from "./scripts/copy-ocr-assets.mjs";
 import { generateIcons } from "./scripts/make-icons.mjs";
 
@@ -37,6 +38,7 @@ function pwaManifestAndPrecachePlugin(): Plugin {
     buildStart() {
       generateIcons();
       ensureOcrAssets();
+      ensureAsrAssets();
     },
     closeBundle() {
       const distDir = path.resolve(__dirname, outDir);
@@ -56,9 +58,9 @@ function pwaManifestAndPrecachePlugin(): Plugin {
         }
       }
 
-      // Collect all built files for precaching (exclude sw.js, source maps, and optional lazy ocr/* runtime packs)
+      // Collect all built files for precaching (exclude sw.js, source maps, and optional lazy ocr/* & asr/* runtime packs)
       const files = walkFiles(distDir).filter(
-        (rel) => rel !== "sw.js" && !rel.endsWith(".map") && !rel.startsWith("ocr/")
+        (rel) => rel !== "sw.js" && !rel.endsWith(".map") && !rel.startsWith("ocr/") && !rel.startsWith("asr/")
       );
       const hash = createHash("sha256");
       for (const rel of files) {
@@ -95,6 +97,10 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "src"),
+      "onnxruntime-web/wasm": path.resolve(__dirname, "node_modules/onnxruntime-web/dist/ort.wasm.min.mjs"),
     },
+  },
+  worker: {
+    format: "es",
   },
 });

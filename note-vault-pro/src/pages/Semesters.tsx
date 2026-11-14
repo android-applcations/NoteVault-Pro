@@ -1,6 +1,6 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { Archive, ArchiveRestore, CalendarRange, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { db } from "@/data/db";
 import { safeCssColor } from "@/domain/sanitize";
@@ -11,23 +11,59 @@ import { useApp } from "@/ui/app-context";
 import { useI18n } from "@/ui/i18n";
 import { Badge, Button, EmptyState, Field, Input, Modal, PageHeader, Select } from "@/ui/kit";
 
+const defaultForm = () => ({
+  name: "",
+  startDate: todayISO(),
+  endDate: todayISO(new Date(Date.now() + 110 * 86400000)),
+});
+
 export default function Semesters() {
   const { t, fmtDate } = useI18n();
   const { toast, confirm } = useApp();
   const semesters = useLiveQuery(() => db.semesters.orderBy("startDate").reverse().toArray(), []);
   const subjects = useLiveQuery(() => db.subjects.filter((s) => !s.deletedAt).toArray(), []) ?? [];
   const [open, setOpen] = useState(false);
-  const [f, setF] = useState({ name: "", startDate: todayISO(), endDate: todayISO(new Date(Date.now() + 110 * 86400000)) });
+  const [saving, setSaving] = useState(false);
+  const [f, setF] = useState(defaultForm);
   const [showArchived, setShowArchived] = useState(false);
+  const nameRef = useRef<HTMLInputElement>(null);
+
+  const openModal = useCallback(() => {
+    setF(defaultForm());
+    setSaving(false);
+    setOpen(true);
+  }, []);
+
+  const closeModal = useCallback(() => {
+    setOpen(false);
+    setSaving(false);
+  }, []);
+
   const save = async () => {
-    try { await createSemester(f); setOpen(false); toast(t("تم إنشاء الفصل", "Semester created")); }
-    catch (e) { toast(errMsg(e) === "BAD_DATES" ? t("تاريخ النهاية قبل البداية", "End date is before start date") : t("أدخل اسم الفصل", "Enter a semester name"), "err"); }
+    if (saving) return;
+    if (!f.name.trim()) {
+      toast(t("أدخل اسم الفصل", "Enter a semester name"), "err");
+      nameRef.current?.focus();
+      return;
+    }
+    setSaving(true);
+    try {
+      await createSemester({ ...f, name: f.name.trim() });
+      setOpen(false);
+      toast(t("تم إنشاء الفصل", "Semester created"));
+    } catch (e) {
+      toast(errMsg(e) === "BAD_DATES" ? t("تاريخ النهاية قبل البداية", "End date is before start date") : t("أدخل اسم الفصل", "Enter a semester name"), "err");
+      nameRef.current?.focus();
+    } finally {
+      setSaving(false);
+    }
   };
+
   const list = (semesters ?? []).filter((s) => showArchived || !s.archived);
   return (
     <div>
       <PageHeader title={t("الفصول الدراسية", "Semesters")} subtitle={t("الفصول المؤرشفة تحتفظ بكل ملاحظاتها وملفاتها", "Archived semesters keep all their notes and files")}
-        actions={<><Button onClick={() => setShowArchived((v) => !v)} aria-pressed={showArchived}>{showArchived ? t("إخفاء المؤرشفة", "Hide archived") : t("تصفح الفصول السابقة", "Browse past semesters")}</Button><Button variant="primary" onClick={() => setOpen(true)}><Plus size={16} />{t("فصل جديد", "New semester")}</Button></>} />
+        actions={<><Button onClick={() => setShowArchived((v) => !v)} aria-pressed={showArchived}>{showArchived ? t("إخفاء المؤرشفة", "Hide archived") : t("تصفح الفصول السابقة", "Browse past semesters")}</Button><Button variant="primary" onClick={openModal}><Plus size={16} />{t("فصل جديد", "New semester")}</Button></>} />
       {semesters && list.length === 0 && <EmptyState icon={<CalendarRange />} title={t("لا توجد فصول", "No semesters")} hint={t("أنشئ فصلاً ثم انقل المواد إليه.", "Create a semester then move subjects into it.")} />}
       <div className="space-y-4">
         {list.map((s) => {
@@ -60,14 +96,24 @@ export default function Semesters() {
           );
         })}
       </div>
-      <Modal open={open} onClose={() => setOpen(false)} title={t("فصل دراسي جديد", "New semester")} footer={<><Button onClick={() => setOpen(false)}>{t("إلغاء", "Cancel")}</Button><Button variant="primary" onClick={() => void save()}>{t("إنشاء", "Create")}</Button></>}>
-        <div className="flex flex-col gap-3">
-          <Field label={t("اسم الفصل", "Name")}>{(id) => <Input id={id} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder={t("الفصل الأول 2025", "Fall 2025")} dir="auto" />}</Field>
+      <Modal
+        open={open}
+        onClose={closeModal}
+        title={t("فصل دراسي جديد", "New semester")}
+        footer={
+          <>
+            <Button type="button" onClick={closeModal}>{t("إلغاء", "Cancel")}</Button>
+            <Button type="submit" form="new-semester-form" variant="primary" disabled={saving}>{saving ? t("جارٍ الإنشاء…", "Creating…") : t("إنشاء", "Create")}</Button>
+          </>
+        }
+      >
+        <form id="new-semester-form" onSubmit={(e) => { e.preventDefault(); void save(); }} className="flex flex-col gap-3">
+          <Field label={t("اسم الفصل", "Name")}>{(id) => <Input ref={nameRef} id={id} value={f.name} onChange={(e) => setF((p) => ({ ...p, name: e.target.value }))} placeholder={t("الفصل الأول 2025", "Fall 2025")} dir="auto" />}</Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label={t("البداية", "Start")}>{(id) => <Input id={id} type="date" value={f.startDate} onChange={(e) => setF({ ...f, startDate: e.target.value })} />}</Field>
-            <Field label={t("النهاية", "End")}>{(id) => <Input id={id} type="date" value={f.endDate} onChange={(e) => setF({ ...f, endDate: e.target.value })} />}</Field>
+            <Field label={t("البداية", "Start")}>{(id) => <Input id={id} type="date" value={f.startDate} onChange={(e) => setF((p) => ({ ...p, startDate: e.target.value }))} />}</Field>
+            <Field label={t("النهاية", "End")}>{(id) => <Input id={id} type="date" value={f.endDate} onChange={(e) => setF((p) => ({ ...p, endDate: e.target.value }))} />}</Field>
           </div>
-        </div>
+        </form>
       </Modal>
     </div>
   );

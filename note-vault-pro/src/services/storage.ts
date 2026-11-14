@@ -63,6 +63,12 @@ export async function getStorageReport(): Promise<StorageReport> {
   }
   const pdfs = await db.pdfDocuments.toArray();
   const pdfTextBytes = pdfs.reduce((s, p) => s + p.pageTexts.reduce((x, t) => x + t.length * 2, 0), 0);
+  const recChunks = await db.recordingChunks.toArray();
+  for (const ch of recChunks) {
+    if (seen.has(ch.blobId)) continue;
+    seen.add(ch.blobId);
+    by.audio += ch.size;
+  }
   const filesBytes = by.pdf + by.image + by.audio + by.text;
   const unl = atts.filter((a) => !a.deletedAt && !a.subjectId && !a.lectureId && !a.noteId);
   let usage: number | undefined, quota: number | undefined, persisted: boolean | undefined;
@@ -129,6 +135,10 @@ async function scanOrphans() {
     questions,
     attempts,
     trashItems,
+    recordings,
+    recordingChunks,
+    recordingMarkers,
+    transcriptSegments,
   ] = await Promise.all([
     db.attachments.toArray(),
     db.blobs.toCollection().primaryKeys(),
@@ -148,10 +158,18 @@ async function scanOrphans() {
     db.quizQuestions.toArray(),
     db.quizAttempts.toArray(),
     db.trashItems.toArray(),
+    db.recordings.toArray(),
+    db.recordingChunks.toArray(),
+    db.recordingMarkers.toArray(),
+    db.transcriptSegments.toArray(),
   ]);
 
   const attSet = new Set(atts.map((a) => a.id));
-  const usedBlobSet = new Set(atts.map((a) => a.blobId));
+  const recSet = new Set(recordings.map((r) => r.id));
+  const usedBlobSet = new Set([
+    ...atts.map((a) => a.blobId),
+    ...recordingChunks.filter((c) => recSet.has(c.recordingId)).map((c) => c.blobId),
+  ]);
   const blobSet = new Set(blobKeys);
   const noteSet = new Set(notesKeys);
   const tagSet = new Set(tagKeys);
@@ -177,6 +195,9 @@ async function scanOrphans() {
   const orphanReviewLogIds = reviewLogs.filter((r) => !cardSet.has(r.cardId)).map((r) => r.id);
   const orphanQuestionIds = questions.filter((r) => !quizSet.has(r.quizId)).map((r) => r.id);
   const orphanAttemptIds = attempts.filter((r) => !quizSet.has(r.quizId)).map((r) => r.id);
+  const orphanRecChunkIds = recordingChunks.filter((c) => !recSet.has(c.recordingId)).map((c) => c.id);
+  const orphanRecMarkerIds = recordingMarkers.filter((m) => !recSet.has(m.recordingId)).map((m) => m.id);
+  const orphanTranscriptSegIds = transcriptSegments.filter((s) => !recSet.has(s.recordingId)).map((s) => s.id);
   const orphanTrashIds = trashItems
     .filter((t) => {
       if (t.kind === "subject") return !subjectSet.has(t.refId);
@@ -196,6 +217,9 @@ async function scanOrphans() {
     orphanReviewLogIds.length +
     orphanQuestionIds.length +
     orphanAttemptIds.length +
+    orphanRecChunkIds.length +
+    orphanRecMarkerIds.length +
+    orphanTranscriptSegIds.length +
     orphanTrashIds.length;
 
   return {
@@ -212,6 +236,9 @@ async function scanOrphans() {
     orphanReviewLogIds,
     orphanQuestionIds,
     orphanAttemptIds,
+    orphanRecChunkIds,
+    orphanRecMarkerIds,
+    orphanTranscriptSegIds,
     orphanTrashIds,
   };
 }
@@ -244,6 +271,9 @@ export async function cleanupOrphans(): Promise<{ blobsRemoved: number; bytesRec
       db.reviewLogs,
       db.quizQuestions,
       db.quizAttempts,
+      db.recordingChunks,
+      db.recordingMarkers,
+      db.transcriptSegments,
       db.trashItems,
     ],
     async () => {
@@ -257,6 +287,9 @@ export async function cleanupOrphans(): Promise<{ blobsRemoved: number; bytesRec
       if (s.orphanReviewLogIds.length) await db.reviewLogs.bulkDelete(s.orphanReviewLogIds);
       if (s.orphanQuestionIds.length) await db.quizQuestions.bulkDelete(s.orphanQuestionIds);
       if (s.orphanAttemptIds.length) await db.quizAttempts.bulkDelete(s.orphanAttemptIds);
+      if (s.orphanRecChunkIds.length) await db.recordingChunks.bulkDelete(s.orphanRecChunkIds);
+      if (s.orphanRecMarkerIds.length) await db.recordingMarkers.bulkDelete(s.orphanRecMarkerIds);
+      if (s.orphanTranscriptSegIds.length) await db.transcriptSegments.bulkDelete(s.orphanTranscriptSegIds);
       if (s.orphanTrashIds.length) await db.trashItems.bulkDelete(s.orphanTrashIds);
     }
   );

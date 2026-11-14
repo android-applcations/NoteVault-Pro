@@ -1,8 +1,9 @@
 // Presentation layer – global UI services: toasts, confirm dialogs, quick capture, card editor.
 import { AnimatePresence, motion } from "motion/react";
 import { CheckCircle2, AlertTriangle, Info } from "lucide-react";
-import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
-import type { CardSource, CardType } from "@/data/types";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import type { Attachment, CardSource, CardType, LectureRecording } from "@/data/types";
+import { lectureRecorder, type RecorderSnapshot } from "@/services/recorder";
 import { Button, Modal } from "./kit";
 import { useI18n } from "./i18n";
 
@@ -34,6 +35,8 @@ interface AppCtx {
   cardPrefill: CardPrefill | null;
   openCard: (p?: CardPrefill) => void;
   closeCard: () => void;
+  recorder: RecorderSnapshot;
+  stopAndSaveRecording: () => Promise<{ recording: LectureRecording; attachment: Attachment } | null>;
 }
 const Ctx = createContext<AppCtx | null>(null);
 
@@ -43,7 +46,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [quickOpen, setQuickOpen] = useState(false);
   const [cardPrefill, setCardPrefill] = useState<CardPrefill | null>(null);
   const [confirmState, setConfirmState] = useState<(ConfirmOpts & { resolve: (v: boolean) => void }) | null>(null);
+  const [recorder, setRecorder] = useState<RecorderSnapshot>(() => lectureRecorder.getSnapshot());
   const idRef = useRef(0);
+
+  useEffect(() => {
+    return lectureRecorder.subscribe(setRecorder);
+  }, []);
 
   const toast = useCallback((msg: string, kind: Toast["kind"] = "ok", action?: Toast["action"]) => {
     const id = ++idRef.current;
@@ -51,9 +59,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setTimeout(() => setToasts((c) => c.filter((x) => x.id !== id)), action ? 9000 : kind === "err" ? 7000 : 3200);
   }, []);
   const confirm = useCallback((o: ConfirmOpts) => new Promise<boolean>((resolve) => setConfirmState({ ...o, resolve })), []);
+  const stopAndSaveRecording = useCallback(async () => {
+    try {
+      const saved = await lectureRecorder.stopAndSave();
+      toast(t("تم حفظ تسجيل المحاضرة", "Lecture recording saved"));
+      return saved;
+    } catch (e) {
+      toast(e instanceof Error ? e.message : t("تعذر حفظ التسجيل", "Could not save recording"), "err");
+      return null;
+    }
+  }, [toast, t]);
+
   const value = useMemo<AppCtx>(
-    () => ({ toast, confirm, quickOpen, setQuickOpen, cardPrefill, openCard: (p) => setCardPrefill(p ?? {}), closeCard: () => setCardPrefill(null) }),
-    [toast, confirm, quickOpen, cardPrefill]
+    () => ({
+      toast,
+      confirm,
+      quickOpen,
+      setQuickOpen,
+      cardPrefill,
+      openCard: (p) => setCardPrefill(p ?? {}),
+      closeCard: () => setCardPrefill(null),
+      recorder,
+      stopAndSaveRecording,
+    }),
+    [toast, confirm, quickOpen, cardPrefill, recorder, stopAndSaveRecording]
   );
   const done = (v: boolean) => {
     confirmState?.resolve(v);

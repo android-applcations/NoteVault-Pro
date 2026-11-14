@@ -281,3 +281,83 @@ export interface CalEvent extends Base {
   type: "exam" | "other";
   subjectId?: ID;
 }
+
+export type RecordingStatus = "recording" | "paused" | "finalizing" | "ready" | "error";
+export type TranscriptionStatus = "idle" | "queued" | "transcribing" | "paused" | "done" | "error";
+
+export interface LectureRecording extends Base, Trashable {
+  subjectId?: ID;
+  lectureId: ID;
+  attachmentId?: ID;
+  noteId?: ID;
+  title: string;
+  mime: string;
+  ext: string;
+  status: RecordingStatus;
+  durationMs: number;
+  chunkCount: number;
+  totalBytes: number;
+  deviceLabel?: string;
+  transcriptionStatus: TranscriptionStatus;
+  transcriptionLang: "auto" | "ar" | "en";
+  transcriptionModelId?: string;
+  transcriptionProgress: number;
+  transcribedMs?: number;
+  transcriptionError?: string;
+  errorDetail?: string;
+}
+
+export interface RecordingChunk {
+  id: ID;
+  recordingId: ID;
+  seq: number;
+  blobId: ID;
+  mime: string;
+  size: number;
+  durationMs: number;
+  startMs: number;
+  endMs: number;
+  createdAt: number;
+}
+
+export interface RecordingMarker extends Base {
+  recordingId: ID;
+  timeMs: number;
+  label: string;
+  color?: string;
+  noteId?: ID;
+}
+
+export interface TranscriptSegment extends Base {
+  recordingId: ID;
+  order: number;
+  startMs: number;
+  endMs: number;
+  text: string;
+  lang?: string;
+  confidence?: number;
+  editedManually: boolean;
+}
+
+export type AsrModelStatus = "not_installed" | "downloading" | "verifying" | "ready" | "error";
+
+export interface AsrModelFileInfo {
+  url: string;
+  size: number;
+  sha256: string;
+}
+
+export interface AsrModelRecord {
+  id: string;
+  name: string;
+  repoId: string;
+  languages: string[];
+  sizeBytes: number;
+  downloadedBytes: number;
+  status: AsrModelStatus;
+  fileHashes: Record<string, AsrModelFileInfo>;
+  verifiedAt?: number;
+  error?: string;
+  updatedAt: number;
+}
+

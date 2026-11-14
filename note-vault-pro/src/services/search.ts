@@ -91,6 +91,21 @@ export async function docFromAttachment(a: Attachment): Promise<SearchDoc> {
     kind = "pdf";
     const pdf = await db.pdfDocuments.get(a.id);
     extra = pdf ? pdf.pageTexts.join("\n") : "";
+  } else if (a.kind === "audio") {
+    const rec = await db.recordings.where("attachmentId").equals(a.id).first();
+    if (rec && !rec.deletedAt) {
+      const [segs, markers] = await Promise.all([
+        db.transcriptSegments.where("recordingId").equals(rec.id).sortBy("order"),
+        db.recordingMarkers.where("recordingId").equals(rec.id).sortBy("timeMs"),
+      ]);
+      extra = [
+        rec.title,
+        markers.map((m) => m.label).filter(Boolean).join(" "),
+        segs.map((s) => s.text).filter(Boolean).join(" "),
+      ]
+        .filter(Boolean)
+        .join("\n");
+    }
   } else if (a.kind === "text" || a.kind === "markdown") {
     const b = await db.blobs.get(a.blobId);
     if (b && b.blob.size < 2_000_000) extra = await b.blob.text();
