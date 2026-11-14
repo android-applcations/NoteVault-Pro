@@ -1,0 +1,163 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@font-face {
+  font-family: "Cairo Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 200 1000;
+  src: url("../node_modules/@fontsource-variable/cairo/files/cairo-arabic-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC;
+}
+@font-face {
+  font-family: "Cairo Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 200 1000;
+  src: url("../node_modules/@fontsource-variable/cairo/files/cairo-latin-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+:root {
+  --bg: #f6f4ef;
+  --surface: #ffffff;
+  --surface2: #efece5;
+  --fg: #17162b;
+  --muted: #64627c;
+  --line: #e1ddd2;
+  --primary: #2b2a6f;
+  --primary-fg: #ffffff;
+  --accent: #0b8579;
+  --success: #15803d;
+  --warn: #b45309;
+  --danger: #c42a3b;
+  color-scheme: light;
+}
+.dark {
+  --bg: #0d0e1d;
+  --surface: #161833;
+  --surface2: #1f2242;
+  --fg: #ecebf7;
+  --muted: #a3a1c0;
+  --line: #2b2e55;
+  --primary: #9a9bf7;
+  --primary-fg: #0d0e1d;
+  --accent: #2dd4bf;
+  --success: #4ade80;
+  --warn: #fbbf24;
+  --danger: #fb7185;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface2: var(--surface2);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-primary: var(--primary);
+  --color-primary-fg: var(--primary-fg);
+  --color-accent: var(--accent);
+  --color-success: var(--success);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
+  --font-sans: "Cairo Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Tahoma, sans-serif;
+}
+
+html {
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--fg);
+  -webkit-tap-highlight-color: transparent;
+}
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--fg);
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+* { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+:focus-visible { outline: 2.5px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+button, [role="button"] { cursor: pointer; }
+button:disabled { cursor: not-allowed; opacity: 0.5; }
+.reduce-motion *, .reduce-motion *::before, .reduce-motion *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+.ltr-iso { direction: ltr; unicode-bidi: isolate; text-align: left; }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+.safe-top { padding-top: env(safe-area-inset-top); }
+
+.card-surface {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 1.1rem;
+  box-shadow: 0 1px 2px rgb(20 20 60 / 0.04), 0 8px 24px -12px rgb(20 20 60 / 0.10);
+}
+.dark .card-surface { box-shadow: 0 1px 0 rgb(255 255 255 / 0.03) inset, 0 8px 24px -12px rgb(0 0 0 / 0.5); }
+
+@keyframes nv-pulse { 0%,100% { opacity: .55 } 50% { opacity: 1 } }
+.skeleton { background: var(--surface2); border-radius: .75rem; animation: nv-pulse 1.4s ease-in-out infinite; }
+
+/* ---------- Rich text editor ---------- */
+.editor-surface .ProseMirror {
+  outline: none;
+  min-height: 55vh;
+  padding: 0.5rem 0 6rem;
+  font-size: 1.05rem;
+  line-height: 1.85;
+  caret-color: var(--accent);
+}
+.ProseMirror p { margin: 0.35em 0; }
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--muted);
+  float: inline-start;
+  height: 0;
+  pointer-events: none;
+}
+.ProseMirror h1 { font-size: 2rem; font-weight: 800; margin: 1.1em 0 0.4em; line-height: 1.3; }
+.ProseMirror h2 { font-size: 1.5rem; font-weight: 700; margin: 1em 0 0.35em; line-height: 1.35; }
+.ProseMirror h3 { font-size: 1.2rem; font-weight: 700; margin: 0.9em 0 0.3em; }
+.ProseMirror ul { list-style: disc; padding-inline-start: 1.6rem; margin: 0.4em 0; }
+.ProseMirror ol { list-style: decimal; padding-inline-start: 1.6rem; margin: 0.4em 0; }
+.ProseMirror li > p { margin: 0.15em 0; }
+.ProseMirror ul[data-type="taskList"] { list-style: none; padding-inline-start: 0.2rem; }
+.ProseMirror ul[data-type="taskList"] li { display: flex; gap: 0.6rem; align-items: flex-start; }
+.ProseMirror ul[data-type="taskList"] li > label { margin-top: 0.45rem; user-select: none; }
+.ProseMirror ul[data-type="taskList"] li > label input { width: 1.1rem; height: 1.1rem; accent-color: var(--accent); }
+.ProseMirror ul[data-type="taskList"] li > div { flex: 1; }
+.ProseMirror ul[data-type="taskList"] li[data-checked="true"] > div { text-decoration: line-through; color: var(--muted); }
+.ProseMirror blockquote { border-inline-start: 4px solid var(--accent); padding: 0.1rem 1rem; margin: 0.8em 0; color: var(--muted); background: color-mix(in srgb, var(--accent) 7%, transparent); border-radius: 0.5rem; }
+.ProseMirror hr { border: 0; border-top: 2px dashed var(--line); margin: 1.5rem 0; }
+.ProseMirror a { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.ProseMirror code { background: var(--surface2); padding: 0.1em 0.35em; border-radius: 0.35rem; font-size: 0.9em; direction: ltr; unicode-bidi: isolate; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.ProseMirror pre { background: #14152b; color: #e7e8ff; padding: 1rem; border-radius: 0.8rem; overflow-x: auto; direction: ltr; text-align: left; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9rem; line-height: 1.6; margin: 0.8em 0; }
+.ProseMirror pre code { background: none; padding: 0; color: inherit; }
+.ProseMirror mark { background: #fde68a; color: #1a1a1a; border-radius: 0.25rem; padding: 0 0.15em; }
+.ProseMirror table { border-collapse: collapse; width: 100%; margin: 0.9em 0; table-layout: fixed; overflow: hidden; }
+.ProseMirror th, .ProseMirror td { border: 1px solid var(--line); padding: 0.45rem 0.65rem; vertical-align: top; position: relative; min-width: 3rem; }
+.ProseMirror th { background: var(--surface2); font-weight: 700; text-align: start; }
+.ProseMirror .selectedCell::after { content: ""; position: absolute; inset: 0; background: color-mix(in srgb, var(--accent) 22%, transparent); pointer-events: none; }
+.ProseMirror img { max-width: 100%; height: auto; border-radius: 0.7rem; margin: 0.5rem 0; cursor: zoom-in; }
+.ProseMirror img.ProseMirror-selectednode { outline: 3px solid var(--accent); }
+.ProseMirror div[data-callout] { border: 1px solid var(--line); border-inline-start: 5px solid var(--warn); background: color-mix(in srgb, var(--warn) 9%, var(--surface)); border-radius: 0.8rem; padding: 0.4rem 1rem; margin: 0.9em 0; }
+.ProseMirror span[data-formula] { direction: ltr; unicode-bidi: isolate; display: inline-block; font-family: "Cambria Math", "STIX Two Math", Cambria, "Times New Roman", serif; font-style: italic; background: color-mix(in srgb, var(--primary) 10%, transparent); padding: 0 0.4em; border-radius: 0.35rem; }
+.ProseMirror .search-hit { background: color-mix(in srgb, var(--accent) 35%, transparent); border-radius: 0.2rem; }
+
+/* ---------- PDF viewer ---------- */
+.pdf-page { position: relative; background: #fff; margin: 0 auto 1rem; box-shadow: 0 6px 24px -8px rgb(0 0 0 / .35); border-radius: 4px; overflow: hidden; }
+.pdf-page canvas { display: block; }
+.textLayer { position: absolute; text-align: initial; inset: 0; overflow: clip; opacity: 1; line-height: 1; text-size-adjust: none; forced-color-adjust: none; transform-origin: 0 0; z-index: 0; --min-font-size: 1; --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size)); --min-font-size-inv: calc(1 / var(--min-font-size)); }
+.textLayer :is(span, br) { color: transparent; position: absolute; white-space: pre; cursor: text; transform-origin: 0% 0%; }
+.textLayer > :not(.markedContent), .textLayer .markedContent span:not(.markedContent) { z-index: 1; --font-height: 0; font-size: calc(var(--text-scale-factor) * var(--font-height)); --scale-x: 1; --rotate: 0deg; transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv)); }
+.textLayer .markedContent { display: contents; }
+.textLayer ::selection { background: rgb(0 100 255 / 0.3); }
+.textLayer .endOfContent { display: block; position: absolute; inset: 100% 0 0; z-index: 0; cursor: default; user-select: none; }
+.textLayer.selecting .endOfContent { top: 0; }
+.textLayer span.pdf-hit { background: rgb(255 214 0 / .55); border-radius: 2px; }

@@ -1,0 +1,2 @@
+# Search
+MiniSearch in memory, loaded from the persisted `searchIndex` table (no file re-reading); every create/edit/delete/restore/PDF extraction re-indexes incrementally. Arabic: diacritics/tatweel removed, أإآ→ا, ى/ئ→ي, ؤ→و, ة→ه, «ال» stripped. Prefix + fuzzy, phrases in quotes, filters (type/subject/date), suggestions, recent searches, deep links (note match scroll, PDF page + highlight). Limits: no OCR for scanned PDFs, no infix matching.

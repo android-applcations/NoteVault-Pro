@@ -1,0 +1,20 @@
+{
+  "id": "./",
+  "name": "NoteVault Pro",
+  "short_name": "NoteVault",
+  "description": "كل محاضراتك، ملاحظاتك، ملفاتك، وأفكارك في مكان واحد.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f6f4ef",
+  "theme_color": "#2b2a6f",
+  "lang": "ar",
+  "dir": "auto",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

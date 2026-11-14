@@ -1,0 +1,2 @@
+# Backup
+ZIP: manifest.json + data/<table>.json + blobs/<id>. Import validates size, entry whitelist (no traversal), manifest/version, record shapes, relations, sanitises notes, verifies blobs (magic bytes + SHA-256), previews, then replace/merge in ONE transaction (rollback on error). Tested: round-trip, merge, corrupt, traversal, newer version, broken relations, XSS payload, tampered blob. Limit: archive is built in memory.

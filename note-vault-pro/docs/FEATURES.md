@@ -1,0 +1,3 @@
+# Features
+Done: subjects/semesters/lectures (weeks, 4 views, duplicate/move/archive), Tiptap editor (headings, marks, colour/highlight/size, lists, tasks, quote, table, image, callout, code, formula mark, `/` menu, bubble menu), autosave + versions, 8 templates, file vault + validation + dedupe, PDF viewer (zoom, jump, search, bookmarks, notes, highlights, card from page), universal search, flashcards (8 types, FSRS), quizzes (7 types), references (APA/MLA/IEEE/Chicago), dashboard, calendar, quick capture (Alt+N), trash, settings, storage manager, backup/restore, PWA assets.
+Limitations: no OCR, no KaTeX, highlights are text snippets (not overlays), incremental rendering instead of true virtualisation, no encryption, hand-written SW, main E2E scenario unresolved.
